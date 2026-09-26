@@ -11,6 +11,7 @@ import { session } from './session';
 import { levelOf } from './profile';
 import { emit } from './bus';
 import { sfx } from '../audio/sound';
+import { coop, inCoop, others, sendRaw } from '../net/coop';
 import { settings } from '../ui/settings';
 import ICONS from '../../assets/Custom/icons.json';
 
@@ -26,7 +27,7 @@ const MAX_HP = 100;
 /** Máu hiện tại trong hang sâu (không lưu — lên khỏi hang là hồi đầy). */
 let hp = MAX_HP;
 
-interface Monster { kind: MonsterKind; spr: Phaser.GameObjects.Sprite; hp: number; hitAt: number; wander: number }
+interface Monster { id: number; kind: MonsterKind; spr: Phaser.GameObjects.Sprite; hp: number; hitAt: number; wander: number; tx?: number; ty?: number; lastHit?: string }
 
 /**
  * Hang đá: tầng 0 là hang trên (đá mọc lại mỗi sáng). Từ cấp nông trại 10 mở hang sâu 30 tầng:
@@ -52,6 +53,10 @@ export class MineScene extends WorldScene {
     const next = data.floor ?? 0;
     if (next > 0 && this.floor === 0) hp = MAX_HP;
     this.floor = next;
+  }
+
+  get locKey() {
+    return this.floor ? `mine:${this.floor}` : 'mine';
   }
 
   private bkey = (x: number, y: number) => (this.floor ? `${this.floor}:${key(x, y)}` : key(x, y));
@@ -135,12 +140,26 @@ export class MineScene extends WorldScene {
     return { blocked, spawns: { entry, deep, default: entry } };
   }
 
+  /** Đá người khác vừa đập (co-op): gỡ hình, thông đường, lộ lối xuống nếu có. */
+  refresh() {
+    const broken = mineBroken(this.state);
+    for (const [k, rock] of this.rocks) {
+      const [x, y] = k.split(',').map(Number);
+      if (!broken.has(this.bkey(x, y))) continue;
+      this.rocks.delete(k);
+      rock.img.destroy();
+      this.grid[y][x] = false;
+      this.ctrl?.setBlocked(x, y, false);
+      if (this.ladder && this.ladder.x === x && this.ladder.y === y && !this.ladderOpen) this.showLadder();
+    }
+  }
+
   private spawnMonster(kind: MonsterKind, x: number, y: number) {
     const m = MONSTERS[kind];
     const anim = `mon-${kind}`;
     if (!this.anims.exists(anim)) this.anims.create({ key: anim, frames: this.anims.generateFrameNumbers('monsters', { frames: [m.row * 2, m.row * 2 + 1] }), frameRate: kind === 'bat' ? 8 : 3, repeat: -1 });
     const spr = this.add.sprite(x, y, 'monsters', m.row * 2).play(anim);
-    this.monsters.push({ kind, spr, hp: m.hp + Math.floor(this.floor / 10) * 2, hitAt: 0, wander: Math.random() * Math.PI * 2 });
+    this.monsters.push({ id: this.monsters.length, kind, spr, hp: m.hp + Math.floor(this.floor / 10) * 2, hitAt: 0, wander: Math.random() * Math.PI * 2 });
   }
 
   private showLadder() {
@@ -221,6 +240,14 @@ export class MineScene extends WorldScene {
       const pl = this.ctrl.sprite;
       for (const m of [...this.monsters]) {
         if (Math.hypot(m.spr.x - cx, m.spr.y - cy) > 18) continue;
+        // Co-op: quái do người điều khiển tầng tính — báo cú đánh cho người đó
+        if (!this.mobOwner()) {
+          sendRaw({ t: 'hit', to: this.ownerCode(), loc: this.locKey, i: m.id, dmg: swordDamage(this.state) });
+          m.spr.setTint(0xff6a6a);
+          this.time.delayedCall(150, () => m.spr.active && m.spr.clearTint());
+          continue;
+        }
+        m.lastHit = coop.me;
         m.hp -= swordDamage(this.state);
         m.hitAt = this.time.now;
         m.spr.setTint(0xff6a6a);
@@ -234,12 +261,61 @@ export class MineScene extends WorldScene {
 
   private kill(m: Monster) {
     this.monsters = this.monsters.filter((x) => x !== m);
+    this.tweens.add({ targets: m.spr, alpha: 0, scale: 1.4, duration: 220, onComplete: () => m.spr.destroy() });
+    // Co-op: bạn đánh cú cuối thì bạn được thưởng
+    if (inCoop() && m.lastHit && m.lastHit !== coop.me) return sendRaw({ t: 'mobkill', to: m.lastHit, loc: this.locKey, kind: m.kind, x: m.spr.x, y: m.spr.y });
+    this.reward(m.kind, m.spr.x, m.spr.y);
+  }
+
+  private reward(kind: MonsterKind, x: number, y: number) {
+    const m = { kind, spr: { x, y } };
     sfx('slay');
     emit('slay', 1, m.kind);
     const drop = m.kind === 'golem' ? 'ore_gold' : m.kind === 'slime' && Math.random() < 0.4 ? 'ore_iron' : Math.random() < 0.3 ? 'ore_copper' : null;
     const t = { x: Math.floor(m.spr.x / TILE), y: Math.floor(m.spr.y / TILE) };
     if (drop && addItem(this.state, drop, 1)) { this.popItem(t, drop); this.renderHud(); }
-    this.tweens.add({ targets: m.spr, alpha: 0, scale: 1.4, duration: 220, onComplete: () => m.spr.destroy() });
+  }
+
+  // ---------------------------------------------------------------- co-op: quái dùng chung
+
+  /** Những người cùng tầng (kể cả mình). */
+  private floorMates() {
+    return [coop.me, ...others().filter((r) => r.loc === this.locKey).map((r) => r.c)].filter(Boolean).sort();
+  }
+  private ownerCode() {
+    return this.floorMates()[0];
+  }
+  /** Người có mã nhỏ nhất trong tầng điều khiển quái (không co-op thì luôn là mình). */
+  private mobOwner() {
+    return !inCoop() || this.ownerCode() === coop.me;
+  }
+  private mobAcc = 0;
+
+  coopMessage(m: { t: string; from?: string; [k: string]: unknown }) {
+    if (m.loc !== this.locKey || !this.floor) return;
+    if (m.t === 'mob' && !this.mobOwner()) {
+      const alive = new Set<number>();
+      for (const [i, x, y, hp] of m.list as number[][]) {
+        alive.add(i);
+        const mo = this.monsters.find((q) => q.id === i);
+        if (mo) { mo.tx = x; mo.ty = y; mo.hp = hp; }
+      }
+      for (const mo of [...this.monsters]) if (!alive.has(mo.id)) {
+        this.monsters = this.monsters.filter((q) => q !== mo);
+        this.tweens.add({ targets: mo.spr, alpha: 0, scale: 1.4, duration: 220, onComplete: () => mo.spr.destroy() });
+      }
+    } else if (m.t === 'hit' && this.mobOwner()) {
+      const mo = this.monsters.find((q) => q.id === m.i);
+      if (!mo) return;
+      mo.hp -= Number(m.dmg) || 1;
+      mo.hitAt = this.time.now;
+      mo.lastHit = m.from;
+      mo.spr.setTint(0xff6a6a);
+      this.time.delayedCall(150, () => mo.spr.active && mo.spr.clearTint());
+      if (mo.hp <= 0) this.kill(mo);
+    } else if (m.t === 'mobkill') {
+      this.reward(m.kind as MonsterKind, Number(m.x), Number(m.y));
+    }
   }
 
   /** Dời quái, không cho xuyên đá (dơi bay qua được). */
@@ -255,12 +331,31 @@ export class MineScene extends WorldScene {
     if (!this.floor || this.paused) return;
     const pl = this.ctrl.sprite;
     const s = dt / 1000;
+    const owner = this.mobOwner();
+    // Người điều khiển tầng: gửi vị trí quái cho cả nhóm
+    this.mobAcc += dt;
+    if (inCoop() && owner && this.mobAcc > 150) {
+      this.mobAcc = 0;
+      sendRaw({ t: 'mob', loc: this.locKey, list: this.monsters.map((m) => [m.id, Math.round(m.spr.x), Math.round(m.spr.y), m.hp]) });
+    }
+    // Quái đuổi người gần nhất trong tầng (mình hoặc bạn)
+    const targets = [{ x: pl.x, y: pl.y }, ...others().filter((r) => r.loc === this.locKey && r.x).map((r) => ({ x: r.x, y: r.y }))];
     for (const m of this.monsters) {
       const def = MONSTERS[m.kind];
       const dx = pl.x - m.spr.x, dy = pl.y - 4 - m.spr.y;
       const d = Math.hypot(dx, dy) || 1;
+      if (!owner) {
+        // Không điều khiển: quái đi mượt tới chỗ người điều khiển báo; vẫn tự tính bị cắn
+        if (m.tx !== undefined) { m.spr.x += (m.tx - m.spr.x) * Math.min(1, dt / 120); m.spr.y += (m.ty! - m.spr.y) * Math.min(1, dt / 120); }
+        m.spr.setFlipX(dx < 0).setDepth(m.spr.y + 6);
+        if (d < 11 && this.time.now - this.hurtAt > 900) this.hurt(def.damage, m);
+        continue;
+      }
       if (this.time.now - m.hitAt < 250) continue;
-      if (d < 7 * TILE) this.push(m, (dx / d) * def.speed * s, (dy / d) * def.speed * s);
+      const near = targets.reduce((a, b) => (Math.hypot(b.x - m.spr.x, b.y - m.spr.y) < Math.hypot(a.x - m.spr.x, a.y - m.spr.y) ? b : a));
+      const tdx = near.x - m.spr.x, tdy = near.y - 4 - m.spr.y;
+      const td = Math.hypot(tdx, tdy) || 1;
+      if (td < 7 * TILE) this.push(m, (tdx / td) * def.speed * s, (tdy / td) * def.speed * s);
       else {
         m.wander += (Math.random() - 0.5) * 0.3;
         this.push(m, Math.cos(m.wander) * def.speed * 0.4 * s, Math.sin(m.wander) * def.speed * 0.4 * s);

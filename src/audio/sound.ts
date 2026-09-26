@@ -1,4 +1,4 @@
-// Âm thanh tự tổng hợp bằng WebAudio: không cần file, không vướng bản quyền.
+// Âm thanh: tiếng động dùng file thu sẵn của Kenney (CC0, src/audio/sfx/) — chưa tải xong hoặc thiếu file thì tự tổng hợp bằng WebAudio.
 // sfx(tên) cho tiếng động; music.play(mùa) cho nhạc nền chơi vòng, mỗi mùa một điệu (thang ngũ cung).
 import type { Season } from '../data';
 import { settings } from '../ui/settings';
@@ -29,11 +29,48 @@ function audio() {
 export function applyVolume() {
   if (!ctx) return;
   sfxBus.gain.value = settings.sfx * 0.6;
-  musicBus.gain.value = settings.music * 0.22;
+  musicBus.gain.value = settings.music * 0.4;
+}
+
+// ---------------------------------------------------------------- tiếng thu sẵn (Kenney, CC0)
+
+/** Tên file: <tiếng>_<số>.m4a — nhiều bản cùng tiếng thì chọn ngẫu nhiên cho đỡ nhàm. */
+const FILES = import.meta.glob('./sfx/*.m4a', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
+const SAMPLE_URLS = new Map<string, string[]>();
+for (const [path, url] of Object.entries(FILES)) {
+  const name = path.replace(/^.*\/|_\d+\.m4a$/g, '');
+  SAMPLE_URLS.set(name, [...(SAMPLE_URLS.get(name) ?? []), url]);
+}
+const buffers = new Map<string, AudioBuffer[]>();
+let loading = false;
+
+/** Tải và giải mã mọi tiếng (sau lần bấm đầu tiên, khi đã có AudioContext). */
+function loadSamples(ac: AudioContext) {
+  if (loading) return;
+  loading = true;
+  for (const [name, urls] of SAMPLE_URLS) {
+    Promise.all(urls.map((u) => fetch(u).then((r) => r.arrayBuffer()).then((b) => ac.decodeAudioData(b)))).then((bufs) => buffers.set(name, bufs)).catch(() => {});
+  }
+}
+
+/** Âm lượng riêng từng tiếng (bước chân nhỏ, tiếng xu vừa…). */
+const SAMPLE_VOL: Record<string, number> = { step_grass: 0.35, step_wood: 0.4, step_stone: 0.35, step_snow: 0.35, step_sand: 0.3, click: 0.5, open: 0.5, coin: 0.8, hoe: 0.9, pick: 0.7, axe: 0.8 };
+
+function playSample(name: string): boolean {
+  const bufs = buffers.get(name);
+  if (!ctx || !bufs?.length) return false;
+  const src = ctx.createBufferSource();
+  src.buffer = bufs[Math.floor(Math.random() * bufs.length)];
+  src.playbackRate.value = 0.94 + Math.random() * 0.12; // lệch cao độ chút cho tự nhiên
+  const g = ctx.createGain();
+  g.gain.value = SAMPLE_VOL[name] ?? 1;
+  src.connect(g).connect(sfxBus);
+  src.start();
+  return true;
 }
 
 // Trình duyệt chỉ cho phát tiếng sau khi người chơi bấm/gõ phím lần đầu
-for (const ev of ['pointerdown', 'keydown']) window.addEventListener(ev, () => { audio(); music.resume(); }, { once: false, passive: true });
+for (const ev of ['pointerdown', 'keydown']) window.addEventListener(ev, () => { const ac = audio(); if (ac) loadSamples(ac); music.resume(); }, { once: false, passive: true });
 
 function tone(freq: number, dur: number, opts: { type?: OscillatorType; vol?: number; at?: number; slide?: number; bus?: GainNode; attack?: number } = {}) {
   const c = audio();
@@ -72,7 +109,7 @@ function noise(dur: number, opts: { freq?: number; q?: number; vol?: number; at?
   src.stop(t + dur + 0.05);
 }
 
-export type Sfx = 'hoe' | 'water' | 'axe' | 'pick' | 'pop' | 'coin' | 'click' | 'eat' | 'splash' | 'catch' | 'fail' | 'cluck' | 'moo' | 'door' | 'build' | 'gift' | 'night' | 'swing' | 'hurt' | 'slay';
+export type Sfx = 'hoe' | 'water' | 'axe' | 'pick' | 'pop' | 'coin' | 'click' | 'eat' | 'splash' | 'catch' | 'fail' | 'cluck' | 'moo' | 'door' | 'build' | 'gift' | 'night' | 'swing' | 'hurt' | 'slay' | 'plant' | 'harvest' | 'open' | 'chest';
 
 const SFX: Record<Sfx, () => void> = {
   hoe: () => { noise(0.12, { freq: 300, q: 0.8, vol: 0.5 }); tone(90, 0.1, { type: 'triangle', vol: 0.3, slide: 0.6 }); },
@@ -94,12 +131,24 @@ const SFX: Record<Sfx, () => void> = {
   swing: () => noise(0.12, { freq: 1800, q: 1, vol: 0.3, sweep: 600 }),
   hurt: () => { tone(220, 0.18, { type: 'square', vol: 0.15, slide: 0.5 }); noise(0.1, { freq: 400, q: 1, vol: 0.3 }); },
   slay: () => [660, 440, 330].forEach((f, i) => tone(f, 0.1, { type: 'square', vol: 0.1, at: i * 0.06 })),
+  plant: () => noise(0.08, { freq: 600, q: 0.7, vol: 0.3 }),
+  harvest: () => tone(700, 0.08, { type: 'triangle', vol: 0.15, slide: 1.4 }),
+  open: () => tone(520, 0.05, { type: 'triangle', vol: 0.1 }),
+  chest: () => { noise(0.06, { freq: 1600, q: 3, vol: 0.3 }); tone(300, 0.08, { type: 'square', vol: 0.08, at: 0.04 }); },
   night: () => [523, 392, 330, 262].forEach((f, i) => tone(f, 0.5, { type: 'triangle', vol: 0.12, at: i * 0.22 })),
 };
 
 export function sfx(name: Sfx) {
   if (settings.sfx <= 0) return;
-  try { SFX[name](); } catch { /* không có âm thanh thì thôi */ }
+  try {
+    if (!playSample(name)) SFX[name]?.();
+  } catch { /* không có âm thanh thì thôi */ }
+}
+
+export type Surface = 'grass' | 'wood' | 'stone' | 'snow' | 'sand';
+/** Tiếng bước chân theo mặt đất (chưa có file thì im, không tổng hợp). */
+export function step(surface: Surface) {
+  if (settings.sfx > 0) try { playSample(`step_${surface}`); } catch { /* bỏ qua */ }
 }
 
 // ---------------------------------------------------------------- nhạc nền

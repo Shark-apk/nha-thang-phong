@@ -242,3 +242,11 @@
 /* Màn nhỏ: bảng ở trang bìa thu theo màn hình */
 .cover-modal .panel { zoom: var(--fit, 1); }
 .boot-wait { position: fixed; inset: 0; z-index: 70; display: flex; align-items: center; justify-content: center; background: #3b2a2e; color: var(--paper); font-family: var(--font); font-size: 32px; }
+
+/* ---------------------------------------------------------------- điện thoại cầm dọc: hai cột thẻ trên, nhân vật xuống dưới, cuộn được */
+@media (orientation: portrait) and (max-width: 900px) {
+  .lobby__main { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: max-content max-content; overflow-y: auto; align-content: start; }
+  .lobby__col { overflow: visible; min-height: auto; }
+  .lobby__col > * { flex-shrink: 0; }
+  .lobby__stage { grid-column: 1 / -1; grid-row: 2; min-height: 360px; }
+}

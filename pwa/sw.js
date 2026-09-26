@@ -1,7 +1,7 @@
 // Service worker: lưu sẵn file game để mở được khi mất mạng. API bạn bè (/api) luôn đi mạng.
 // Trang chính: lấy mạng trước (để nhận bản mới), mất mạng thì dùng bản đã lưu.
 // Hình, script có mã băm: dùng bản đã lưu ngay, cập nhật ngầm.
-const CACHE = 'nha-thang-phong-v1';
+const CACHE = 'nha-thang-phong-v2';
 const MAX_ENTRIES = 400;
 
 self.addEventListener('install', (e) => {

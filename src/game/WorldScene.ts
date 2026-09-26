@@ -16,7 +16,7 @@ import { BUILDINGS, ANIMALS } from '../data';
 import { TILE } from './world';
 import type { Hud } from '../ui/hud';
 import * as net from '../net/friends';
-import { applyVolume, music, sfx } from '../audio/sound';
+import { applyVolume, music, sfx, type Surface } from '../audio/sound';
 import { buyDecor, buyPiece, rideCart, sellNow } from './town';
 import { pieceName, REGIONS, type RegionId } from '../data';
 import { emit } from './bus';
@@ -28,6 +28,10 @@ import { PETS } from '../data';
 import { saveSettings, settings } from '../ui/settings';
 import { advanceTutorial, isLastStep, tutorialText } from './tutorial';
 import { actionOf, pollPad, type Action } from './controls';
+import { afterGuestNight, afterHostNight, coopSleep, inCoop, isGuest, others, sendPos } from '../net/coop';
+import { applyWorld, type WorldSnap } from './coopWorld';
+import { buildSheet } from '../ui/avatar';
+import type { Look } from '../data';
 
 /** 10 phút trong game trôi qua sau bấy nhiêu mili giây thật: 5 giây ở mức mặc định (≈ 11 phút/ngày), chậm hơn nếu người chơi chọn. */
 const msPer10Min = () => 5000 * ((settings.dayMinutes || 11) / 11);
@@ -109,6 +113,17 @@ export abstract class WorldScene extends Phaser.Scene {
     this.weatherFx = undefined;
     this.flashTimer = undefined;
     this.exits = [];
+    this.remoteSprites = new Map();
+    this.lastPos = '';
+    this.coopWaiting = false;
+  }
+
+  /** Mặt đất cho tiếng bước chân: trong nhà sàn gỗ, hang đá, biển cát, mùa đông tuyết. */
+  protected surface(): Surface {
+    if (['house', 'coop', 'barn', 'shed', 'greenhouse'].includes(this.location)) return 'wood';
+    if (this.location === 'mine') return 'stone';
+    if (this.location === 'sea') return 'sand';
+    return seasonOf(this.state.day) === 'winter' && this.location !== 'sky' ? 'snow' : 'grass';
   }
 
   /** Dựng bản đồ; trả về lưới ô bị chặn và các điểm xuất hiện đặt tên (pixel). */
@@ -124,6 +139,7 @@ export abstract class WorldScene extends Phaser.Scene {
     const sp = this.spawn ? spawns[this.spawn] : undefined;
     const start = sp ?? this.state.player;
     this.ctrl = new PlayerController(this, start.x, start.y, blocked, (t) => this.tryInteract(t));
+    this.ctrl.surface = this.surface();
     if (sp?.dir) this.ctrl.place(sp.x, sp.y, sp.dir);
     this.state.player = { x: start.x, y: start.y };
 
@@ -132,6 +148,12 @@ export abstract class WorldScene extends Phaser.Scene {
     const cam = this.cameras.main;
     cam.setRoundPixels(true);
     const fit = () => {
+      // Phaser đổi cỡ ngay lúc máy báo xoay, khi trình duyệt chưa đổi khung xong → canvas kẹt ở cỡ cũ (màn dọc trong khi máy đã ngang).
+      // Khung cha đã khác cỡ canvas thì đo lại ở khung hình sau.
+      const ps = this.scale.parentSize;
+      if (ps.width > 0 && ps.height > 0 && (Math.abs(ps.width - this.scale.width) > 1 || Math.abs(ps.height - this.scale.height) > 1)) {
+        requestAnimationFrame(() => this.scale.refresh());
+      }
       cam.setZoom(Math.max(2, Math.round(Math.min(this.scale.width / 420, this.scale.height / 270))));
       // Bản đồ nhỏ hơn màn hình (trong nhà): đặt giữa màn hình thay vì bám theo nhân vật
       const small = w * cam.zoom <= this.scale.width && h * cam.zoom <= this.scale.height;
@@ -337,6 +359,7 @@ export abstract class WorldScene extends Phaser.Scene {
 
   private buy(item: ItemId, qty: number) {
     const r = buy(this.state, item, qty);
+    sfx(r.ok ? 'coin' : 'fail');
     this.hud.toast(r.ok ? `Đã mua ${qty} ${ITEMS[item].name}` : r.reason);
     this.renderHud();
     return r.ok;
@@ -471,13 +494,16 @@ export abstract class WorldScene extends Phaser.Scene {
   /** Qua đêm: luôn thức dậy cạnh giường trong nhà. */
   goToSleep(passedOut: boolean) {
     if (this.visit) return this.leaveVisit();
+    // Co-op: khách chờ chủ phòng; chủ chờ cả nhóm lên giường
+    if (coopSleep(passedOut)) { this.coopWaiting = true; return; }
     this.paused = true;
     sfx('night');
     this.hud.fadeOut(() => {
       const r = sleep(this.state, passedOut);
       this.state.location = 'house';
+      afterHostNight(this.state);
       saveGame(this.state);
-      syncFriends(this.state, this.hud);
+      if (!isGuest()) syncFriends(this.state, this.hud);
       this.hud.fadeIn(morningText(this.state, r, passedOut));
       this.scene.start('house', { state: this.state, hud: this.hud, spawn: 'bed', message: morningNote(this.state, r) } satisfies SceneData);
     });
@@ -496,6 +522,7 @@ export abstract class WorldScene extends Phaser.Scene {
     const step = msPer10Min();
     while (this.clockAcc >= step) {
       this.clockAcc -= step;
+      if (this.coopWaiting && isGuest()) break; // khách đã lên giường / quá 2h: chờ chủ phòng cho qua đêm
       const passOut = advanceClock(this.state, 10);
       if (this.state.minutes === 17 * 60 && !this.visit) this.remindWater();
       this.renderHud();
@@ -505,6 +532,7 @@ export abstract class WorldScene extends Phaser.Scene {
       }
     }
     this.state.player = { x: this.ctrl.sprite.x, y: this.ctrl.sprite.y };
+    if (inCoop()) this.coopTick(dtMs);
     this.miniAcc += dtMs;
     if (this.miniAcc > 400) {
       this.miniAcc = 0;
@@ -565,6 +593,97 @@ export abstract class WorldScene extends Phaser.Scene {
         onQuit: () => { this.autosave(); location.reload(); },
       });
     }
+  }
+
+  // ---------------------------------------------------------------- co-op
+
+  /** Khóa chỗ đứng để người khác biết mình ở cùng cảnh không (hang sâu thêm số tầng). */
+  get locKey(): string {
+    return this.location;
+  }
+  protected coopWaiting = false;
+  private coopAcc = 0;
+  private lastPos = '';
+  private remoteSprites = new Map<string, { spr: Phaser.GameObjects.Sprite; label: Phaser.GameObjects.Text; bubble?: Phaser.GameObjects.Text; tex: string }>();
+
+  /** Gửi vị trí của mình, vẽ người chơi khác cùng cảnh (đi mượt tới chỗ họ). */
+  private coopTick(dtMs: number) {
+    this.coopAcc += dtMs;
+    const v = this.ctrl.sprite.body!.velocity;
+    const moving = Math.abs(v.x) + Math.abs(v.y) > 1;
+    if (this.coopAcc > 110) {
+      this.coopAcc = 0;
+      const pos = { x: Math.round(this.ctrl.sprite.x), y: Math.round(this.ctrl.sprite.y), loc: this.locKey, dir: this.ctrl.dir, moving };
+      const k = JSON.stringify(pos);
+      if (k !== this.lastPos) { this.lastPos = k; sendPos(pos); }
+    }
+    const here = new Set<string>();
+    for (const r of others()) {
+      if (r.loc !== this.locKey || !r.x) continue;
+      here.add(r.c);
+      let o = this.remoteSprites.get(r.c);
+      if (!o) {
+        const spr = this.add.sprite(r.x, r.y, 'char', 0).setOrigin(0.5, 0.62);
+        const label = this.add.text(r.x, r.y - 22, r.n, { fontFamily: 'VT323', fontSize: '8px', color: '#fff', stroke: '#3b2a2e', strokeThickness: 2, resolution: 4 }).setOrigin(0.5).setDepth(9001);
+        o = { spr, label, tex: 'char' };
+        this.remoteSprites.set(r.c, o);
+      }
+      if (r.look && o.tex === 'char') this.remoteLook(r.c, r.look, o);
+      const k = Math.min(1, dtMs / 90);
+      o.spr.x += (r.x - o.spr.x) * k;
+      o.spr.y += (r.y - o.spr.y) * k;
+      const anim = `${o.tex}-${r.moving ? 'walk' : 'idle'}-${r.dir}`;
+      if (this.anims.exists(anim) && o.spr.anims.currentAnim?.key !== anim) o.spr.play(anim);
+      o.spr.setDepth(o.spr.y + 7);
+      o.label.setPosition(o.spr.x, o.spr.y - 22).setText(r.n);
+      const chat = r.chat && r.chat.until > Date.now() ? r.chat.text : '';
+      if (chat && !o.bubble) o.bubble = this.add.text(0, 0, '', { fontFamily: 'VT323', fontSize: '11px', color: '#3b2a2e', backgroundColor: '#f4e7c8', padding: { x: 3, y: 1 }, resolution: 4, wordWrap: { width: 120 } }).setOrigin(0.5, 1).setDepth(9002);
+      if (o.bubble) { o.bubble.setVisible(!!chat).setText(chat).setPosition(o.spr.x, o.spr.y - 28); }
+    }
+    for (const [c, o] of this.remoteSprites) if (!here.has(c)) { o.spr.destroy(); o.label.destroy(); o.bubble?.destroy(); this.remoteSprites.delete(c); }
+  }
+
+  /** Dựng hình người chơi khác theo ngoại hình của họ (một lần mỗi ngoại hình). */
+  private remoteLook(c: string, look: Look, o: { spr: Phaser.GameObjects.Sprite; tex: string }) {
+    const key = `remote-${[...JSON.stringify(look)].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 7).toString(36)}`;
+    o.tex = key;
+    const ready = () => {
+      if (!this.anims.exists(`${key}-idle-down`)) for (const [d, row] of [['down', 0], ['up', 1], ['left', 2], ['right', 3]] as const) {
+        this.anims.create({ key: `${key}-idle-${d}`, frames: this.anims.generateFrameNumbers(key, { frames: [row * 4, row * 4 + 1] }), frameRate: 2, repeat: -1 });
+        this.anims.create({ key: `${key}-walk-${d}`, frames: this.anims.generateFrameNumbers(key, { frames: [row * 4 + 2, row * 4 + 3] }), frameRate: 7, repeat: -1 });
+      }
+      if (o.spr.active) o.spr.setTexture(key, 0);
+    };
+    if (this.textures.exists(key)) return ready();
+    buildSheet(look, 'char').then((cv) => {
+      if (!this.textures.exists(key)) {
+        const t = this.textures.addCanvas(key, cv)!;
+        for (let f = 0; f < 16; f++) t.add(f, 0, (f % 4) * 48, Math.floor(f / 4) * 48, 48, 48);
+      }
+      if (this.scene.isActive()) ready();
+    }).catch(() => {});
+  }
+
+  /** Chủ phòng: cả nhóm đã lên giường → qua đêm. */
+  coopSleepNow() {
+    this.coopWaiting = false;
+    this.goToSleep(false);
+  }
+
+  /** Khách: chủ phòng vừa cho cả nhóm qua đêm — tính phần của mình (sức, tiền bán hàng…) rồi lấy đất + ngày của chủ. */
+  coopNight(w: WorldSnap) {
+    this.paused = true;
+    this.coopWaiting = false;
+    sfx('night');
+    this.hud.fadeOut(() => {
+      const r = sleep(this.state, false);
+      applyWorld(this.state, w);
+      afterGuestNight(this.state);
+      this.state.location = 'house';
+      saveGame(this.state);
+      this.hud.fadeIn(morningText(this.state, r, false));
+      this.scene.start('house', { state: this.state, hud: this.hud, spawn: 'bed', message: morningNote(this.state, r) } satisfies SceneData);
+    });
   }
 
   /** Đang ghé nông trại bạn (thư bạn bè đợi về nhà mới nhận, kẻo tiền bị ghi đè khi rời đi). */

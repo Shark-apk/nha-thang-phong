@@ -34,17 +34,20 @@ export function mountTouch() {
       <button class="tb__btn tb__use" data-act="use">Dùng</button>
       <button class="tb__btn tb__eat" data-act="eat">Ăn</button>
     </div>
-    <div class="tm">${MENU.map(([label, act]) => `<button class="tm__btn" data-act="${act}">${label}</button>`).join('')}</div>`;
-  const rotate = document.createElement('div');
-  rotate.className = 'rotate';
-  rotate.innerHTML = '<div><b>Xoay ngang điện thoại</b><span>Nhà Thằng Phong chơi ở màn hình ngang</span></div>';
-  document.body.append(root, rotate);
+    <div class="tm">${MENU.map(([label, act]) => `<button class="tm__btn" data-act="${act}">${label}</button>`).join('')}${canFullscreen() ? '<button class="tm__btn tm__fs" aria-label="Toàn màn hình">⛶</button>' : ''}</div>`;
+  document.body.append(root, mountRotate());
 
   root.querySelectorAll<HTMLButtonElement>('[data-act]').forEach((b) => {
     b.addEventListener('pointerdown', (e) => { e.preventDefault(); b.classList.add('on'); sendAction(b.dataset.act as Action); });
     const off = () => b.classList.remove('on');
     b.addEventListener('pointerup', off);
     b.addEventListener('pointercancel', off);
+  });
+
+  // Nút toàn màn hình (Android): vào/thoát toàn màn hình, vào thì thử khoá ngang luôn
+  root.querySelector('.tm__fs')?.addEventListener('click', () => {
+    if (document.fullscreenElement) void document.exitFullscreen?.().catch(() => {});
+    else void goLandscape();
   });
 
   // Cần điều khiển: kéo núm trong vòng tròn, lệch càng xa đi càng nhanh
@@ -70,4 +73,70 @@ export function mountTouch() {
   pad.addEventListener('pointercancel', end);
   // Mở bảng (túi, cửa hàng…) thì thả cần để nhân vật không đi tiếp
   window.addEventListener('blur', end);
+}
+
+// ---------------------------------------------------------------- màn dọc
+// Điện thoại bật "Khóa xoay dọc" (iPhone) / tắt "Tự động xoay" (Android) thì trình duyệt không bao giờ xoay ngang,
+// còn Safari iPhone không cho trang tự khoá hướng màn. Nên màn nhắc xoay chỉ là lời khuyên: luôn có nút chơi tiếp.
+const PORTRAIT_KEY = 'nongtrai.ui.portraitOk';
+
+function portraitOk() {
+  try { return localStorage.getItem(PORTRAIT_KEY) === '1'; } catch { return false; }
+}
+
+function setPortraitOk(on: boolean) {
+  document.body.classList.toggle('portrait-ok', on);
+  try { if (on) localStorage.setItem(PORTRAIT_KEY, '1'); else localStorage.removeItem(PORTRAIT_KEY); } catch { /* bỏ qua */ }
+}
+
+const canFullscreen = () => !!(document.fullscreenEnabled || (document as Document & { webkitFullscreenEnabled?: boolean }).webkitFullscreenEnabled);
+
+type LockableOrientation = ScreenOrientation & { lock?: (o: string) => Promise<void> };
+
+/** Vào toàn màn hình rồi khoá ngang (Chrome Android làm được; Safari iPhone thì không). Trả về true nếu đã xoay được. */
+export async function goLandscape(): Promise<boolean> {
+  const el = document.documentElement as HTMLElement & { webkitRequestFullscreen?: () => void };
+  try {
+    if (!document.fullscreenElement) {
+      if (el.requestFullscreen) await el.requestFullscreen({ navigationUI: 'hide' });
+      else el.webkitRequestFullscreen?.();
+    }
+  } catch { /* máy không cho toàn màn hình */ }
+  try {
+    const o = screen.orientation as LockableOrientation | undefined;
+    if (o?.lock) await o.lock('landscape');
+  } catch { /* không khoá được hướng (iPhone, hoặc chưa toàn màn hình) */ }
+  // Chờ trình duyệt đổi cỡ xong rồi mới xem đã ngang chưa
+  await new Promise((r) => setTimeout(r, 350));
+  return !matchMedia('(orientation: portrait)').matches;
+}
+
+function mountRotate() {
+  const rotate = document.createElement('div');
+  rotate.className = 'rotate';
+  rotate.innerHTML = `<div class="rotate__box">
+    <b>Xoay ngang điện thoại</b>
+    <span>Nhà Thằng Phong chơi đẹp nhất ở màn hình ngang</span>
+    <p class="rotate__tip">Đã xoay mà không đổi? Có thể máy đang <b>khoá xoay</b>:<br>
+      • <b>iPhone</b>: vuốt từ góc phải trên xuống → tắt biểu tượng ổ khoá 🔒<br>
+      • <b>Android</b>: kéo thanh thông báo xuống → bật <b>Tự động xoay</b></p>
+    <div class="rotate__btns">
+      <button class="rotate__btn rotate__btn--go" data-rot="fs">Toàn màn hình &amp; xoay ngang</button>
+      <button class="rotate__btn" data-rot="portrait">Chơi màn dọc</button>
+    </div>
+    <small class="rotate__msg"></small>
+  </div>`;
+  if (portraitOk()) document.body.classList.add('portrait-ok');
+  const msg = rotate.querySelector<HTMLElement>('.rotate__msg')!;
+  const fs = rotate.querySelector<HTMLButtonElement>('[data-rot="fs"]')!;
+  // Không có cách nào vào toàn màn hình (Safari iPhone) thì ẩn nút cho khỏi bấm vô ích
+  if (!canFullscreen()) fs.hidden = true;
+  fs.addEventListener('click', async () => {
+    msg.textContent = '';
+    if (!(await goLandscape())) msg.textContent = 'Máy không cho tự xoay — hãy tắt khoá xoay rồi xoay ngang, hoặc bấm “Chơi màn dọc”.';
+  });
+  rotate.querySelector('[data-rot="portrait"]')!.addEventListener('click', () => setPortraitOk(true));
+  const land = matchMedia('(orientation: landscape)');
+  land.addEventListener?.('change', () => { if (land.matches) msg.textContent = ''; });
+  return rotate;
 }

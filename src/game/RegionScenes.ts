@@ -148,6 +148,12 @@ abstract class RegionScene extends WorldScene {
     }
   }
 
+  /** Đồ người khác vừa nhặt (co-op): gỡ khỏi đất. */
+  refresh() {
+    const taken = takenToday(this.state);
+    for (const [k, p] of this.pickups) if (taken.has(k)) { p.img.destroy(); this.pickups.delete(k); }
+  }
+
   /** Nhặt đồ ở ô `t` nếu có. */
   protected tryPickup(t: Tile) {
     const k = key(t.x, t.y);
@@ -224,6 +230,19 @@ export class ForestScene extends RegionScene {
     this.scatter(this.freeSpots(), 12);
     this.message ??= 'Rừng — nấm, măng, mật ong mọc mỗi sáng; cây sẫm màu cho gỗ quý (cầm rìu)';
     return { blocked, spawns: { cart, default: cart } };
+  }
+
+  refresh() {
+    super.refresh();
+    // Cây gỗ quý người khác vừa chặt
+    const taken = takenToday(this.state);
+    for (const [k, tree] of this.trees) {
+      if (!taken.has(tree.at)) continue;
+      this.trees.delete(k);
+      const [x, y] = k.split(',').map(Number);
+      this.ctrl?.setBlocked(x, y, false);
+      if (tree.img.active) tree.img.destroy();
+    }
   }
 
   protected interact(t: Tile) {

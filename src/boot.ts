@@ -16,6 +16,9 @@ import { installPlayerSheets } from './game/playerSheet';
 import { syncFriends, WorldScene } from './game/WorldScene';
 import { saveGame } from './game/save';
 import { pushCloud } from './net/cloud';
+import { initCoop, isGuest } from './net/coop';
+import { on as onGameEvent } from './game/bus';
+import { sfx } from './audio/sound';
 import * as net from './net/friends';
 
 export function start(state: FarmState) {
@@ -47,6 +50,25 @@ export function start(state: FarmState) {
     message: fresh ? 'Chào mừng tới nông trại! Cầm cuốc (phím 1) và bấm Space trước mặt để cuốc đất.' : `Ngày ${state.day} — chúc một ngày làm vườn vui vẻ!`,
   });
   document.body.classList.add('playing');
+  // Tiếng cho những việc luật game báo qua kênh sự kiện (gieo, thu hoạch, lấy trứng/sữa…)
+  onGameEvent((e) => {
+    if (e === 'plant') sfx('plant');
+    else if (e === 'harvest' || e === 'collect') sfx('harvest');
+  });
+  const active = () => game.scene.getScenes(true).find((x): x is WorldScene => x instanceof WorldScene);
+  initCoop({
+    state: () => session.live,
+    scene: () => active(),
+    switchTo: (s, key, spawn, message) => {
+      const sc = active();
+      if (!sc) return;
+      hud.close();
+      s.location = key as FarmState['location'];
+      sc.scene.start(key, { state: s, hud, spawn, message });
+    },
+    toast: (m) => hud.toast(m),
+    bar: () => hud.coopBar(),
+  });
   // Tự lưu: khi ẩn / đóng tab; lên mây mỗi 5 phút
   const saveNow = () => { if (session.live) saveGame(session.live); };
   window.addEventListener('pagehide', saveNow);
@@ -54,7 +76,8 @@ export function start(state: FarmState) {
   // Thư bạn bè (tưới giúp, quà, tim, bán được hàng) nhận ngay trong lúc chơi, mỗi phút một lần
   window.setInterval(async () => {
     const sc = game.scene.getScenes(true).find((x): x is WorldScene => x instanceof WorldScene);
-    if (!session.live || !net.loadIdentity() || !sc || sc.visiting || document.visibilityState === 'hidden') return;
+    // Đang làm khách co-op: đợi về nông trại mình mới nhận (tưới giúp phải vào đất của mình)
+    if (!session.live || !net.loadIdentity() || !sc || sc.visiting || isGuest() || document.visibilityState === 'hidden') return;
     try {
       const msgs = await net.fetchInbox();
       if (!msgs.length) return;

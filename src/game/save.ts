@@ -79,10 +79,15 @@ export function loadGame(n = slot): FarmState | null {
 
 export const saveKey = keyOf;
 
+/** Co-op: khi đang làm khách ở nông trại bạn, bản lưu phải là nông trại của mình (không phải đất của chủ phòng). */
+let saveHook: ((s: FarmState) => FarmState) | null = null;
+export const setSaveHook = (f: typeof saveHook) => { saveHook = f; };
+export const forSave = (s: FarmState) => (saveHook ? saveHook(s) : s);
+
 export function saveGame(s: FarmState) {
   try {
     s.savedAt = Date.now();
-    localStorage.setItem(keyOf(slot), JSON.stringify(s));
+    localStorage.setItem(keyOf(slot), JSON.stringify(forSave(s)));
     return true;
   } catch {
     return false;

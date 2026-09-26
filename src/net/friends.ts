@@ -2,7 +2,7 @@
 import { ITEMS, QUALITY_MULT, type ItemId } from '../data';
 import type { FarmState } from '../game/farm';
 
-import { currentSlot } from '../game/save';
+import { currentSlot, forSave } from '../game/save';
 import { addItem } from '../game/farm';
 import { beautyOf } from '../game/farming2';
 import { levelOf, sendMail, type Profile } from '../game/profile';
@@ -95,7 +95,7 @@ export function scoreOf(s: FarmState): Score {
 
 export const uploadSnapshot = (s: FarmState) => {
   const id = me();
-  return call(id.url, '/api/snapshot', { token: id.token, body: { snapshot: snapshotOf(s, id.name) } });
+  return call(id.url, '/api/snapshot', { token: id.token, body: { snapshot: snapshotOf(forSave(s), id.name) } });
 };
 export const listFriends = () => { const id = me(); return call<Friend[]>(id.url, '/api/friends', { token: id.token }); };
 export const addFriend = (code: string) => { const id = me(); return call<{ code: string; name: string }>(id.url, '/api/friends', { token: id.token, body: { code } }); };

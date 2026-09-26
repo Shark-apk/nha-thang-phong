@@ -29,6 +29,7 @@ const routes = [
   ['POST', `/api/friends/${CODE}/block`, async (db, m, _b, me) => F.block(db, await me(), m[1])],
   ['POST', `/api/friends/${CODE}/unblock`, async (db, m, _b, me) => F.unblock(db, await me(), m[1])],
   ['POST', '/api/errors', (db, _m, body) => F.logError(db, body)],
+  ['POST', `/api/coop/${CODE}/ticket`, async (db, m, _b, me) => F.coopTicket(db, await me(), m[1], process.env.COOP_SECRET)],
   ['GET', '/api/blocks', async (db, _m, _b, me) => F.listBlocks(db, await me())],
 ].map(([method, path, fn]) => [method, new RegExp(`^${path}$`), fn]);
 

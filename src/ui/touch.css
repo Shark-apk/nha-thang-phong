@@ -16,10 +16,20 @@
 .tm { position: absolute; left: max(8px, env(safe-area-inset-left)); top: 6px; display: flex; gap: 4px; flex-wrap: wrap; max-width: 60vw; }
 .tm__btn { min-width: 44px; height: 34px; padding: 0 8px; font-size: 18px; background: var(--paper); color: var(--ink); border: 2px solid var(--edge); border-radius: 8px; box-shadow: 0 3px 0 rgba(59, 42, 46, 0.35); }
 
-.rotate { display: none; position: fixed; inset: 0; pointer-events: auto; background: #3b2a2e; color: var(--paper); align-items: center; justify-content: center; text-align: center; z-index: 99; }
-.rotate b { display: block; font-size: 34px; margin-bottom: 8px; }
-.rotate span { font-size: 22px; opacity: 0.8; }
-@media (orientation: portrait) { body.touch .rotate { display: flex; } }
+/* Màn nhắc xoay ngang — chỉ là lời khuyên, luôn có nút "Chơi màn dọc" (máy khoá xoay thì không bao giờ ngang được) */
+.rotate { display: none; position: fixed; inset: 0; pointer-events: auto; background: #3b2a2e; color: var(--paper); align-items: center; justify-content: center; text-align: center; z-index: 99;
+  padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom)); overflow-y: auto; font-family: var(--font); }
+.rotate__box { max-width: 420px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.rotate__box > b { display: block; font-size: 34px; }
+.rotate__box > span { font-size: 22px; opacity: 0.8; }
+.rotate__tip { margin: 6px 0 4px; padding: 10px 12px; font-size: 19px; line-height: 1.2; text-align: left; background: rgba(244, 231, 200, 0.12); border: 2px solid rgba(244, 231, 200, 0.3); border-radius: 8px; }
+.rotate__tip b { color: #ffd878; font-weight: normal; }
+.rotate__btns { display: flex; flex-direction: column; gap: 10px; width: 100%; }
+.rotate__btn { min-height: 52px; padding: 6px 14px; font-family: var(--font); font-size: 24px; color: var(--ink); background: var(--paper); border: 3px solid var(--edge); border-radius: 10px; box-shadow: 0 4px 0 rgba(0, 0, 0, 0.35); -webkit-tap-highlight-color: transparent; }
+.rotate__btn--go { background: var(--accent); color: #fff4e0; border-color: #7e3322; }
+.rotate__btn[hidden] { display: none; }
+.rotate__msg { min-height: 1em; font-size: 18px; color: #ffd878; }
+@media (orientation: portrait) { body.touch:not(.portrait-ok) .rotate { display: flex; } }
 
 /* Chỉ hiện khi đang ở trong game (không hiện ở trang bìa, sảnh) */
 body.playing .touch-ui { display: block; }
@@ -32,3 +42,19 @@ body.touch .hud-tut { top: 110px; }
 body.touch .hud-toast { top: 110px; }
 body.touch .hud-bar { bottom: 8px; }
 .tm__btn.dot { position: relative; } .tm__btn.dot::after { content: ""; position: absolute; right: -3px; top: -3px; width: 10px; height: 10px; border-radius: 50%; background: #e0302a; border: 2px solid #fff; }
+
+/* ---------------------------------------------------------------- chơi màn dọc
+   Thanh đồ nằm sát đáy, trải gần hết bề ngang → đẩy cần điều khiển và nút Dùng/Ăn lên trên nó,
+   thu nhỏ một chút cho vừa bề ngang ~390px. */
+@media (orientation: portrait) {
+  body.touch .tj { bottom: calc(76px + env(safe-area-inset-bottom)); width: 108px; height: 108px; }
+  body.touch .tb { bottom: calc(76px + env(safe-area-inset-bottom)); }
+  body.touch .tb__use { width: 72px; height: 72px; font-size: 24px; }
+  body.touch .tb__eat { width: 50px; height: 50px; font-size: 18px; margin-bottom: 40px; }
+  body.touch .tm { max-width: calc(100vw - 126px); top: max(6px, env(safe-area-inset-top)); }
+  body.touch .tm__btn { min-width: 40px; height: 32px; padding: 0 6px; font-size: 17px; }
+  body.touch .hud-bar { bottom: calc(8px + env(safe-area-inset-bottom)); }
+  /* #ui bị thu theo --ui-scale (~0.5) nên các số dưới đây gấp đôi px thật: chừa chỗ cho hai hàng nút menu */
+  body.touch .hud-tut, body.touch .hud-toast { top: 170px; }
+  html body.touch .hud-coop { top: 200px; }
+}

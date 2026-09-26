@@ -1,6 +1,6 @@
 // Lưu lên mây qua server bạn bè: mỗi ô lưu gắn với một danh tính (mã bạn bè). Mã khôi phục lấy lại danh tính ở máy khác.
 import type { FarmState } from '../game/farm';
-import { currentSlot, migrate, saveGame, useSlot } from '../game/save';
+import { currentSlot, forSave, migrate, saveGame, useSlot } from '../game/save';
 import { saveProfile, loadProfile, type Profile } from '../game/profile';
 import { session } from '../game/session';
 import { settings } from '../ui/settings';
@@ -34,7 +34,7 @@ export async function pushCloud(s: FarmState, force = false): Promise<'ok' | 'co
   try {
     const r = await call<{ updated: number }>(id.url, '/api/save', {
       token: id.token,
-      body: { data: JSON.stringify(s), profile: JSON.stringify(session.profile), base: s.cloudAt ?? 0, force },
+      body: { data: JSON.stringify(forSave(s)), profile: JSON.stringify(session.profile), base: s.cloudAt ?? 0, force },
     });
     s.cloudAt = r.updated;
     saveGame(s);

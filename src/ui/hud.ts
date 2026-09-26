@@ -23,6 +23,7 @@ import { sfx } from '../audio/sound';
 import { settings } from './settings';
 import { openSavePanel } from './savePanel';
 import { touchText } from './touch';
+import { coop, coopAvailable, hostRoom, joinRoom, leaveRoom, others, sendChat } from '../net/coop';
 import { session } from '../game/session';
 import { storyStep } from '../game/quests';
 
@@ -97,6 +98,7 @@ export class Hud {
   private clock = el('div', 'hud-clock');
   private energy = el('div', 'hud-energy', '<div class="hud-energy__fill"></div><span>Sức</span>');
   private questsEl = el('div', 'hud-quests');
+  private coopEl = el('div', 'hud-coop');
   private mini = el('canvas', 'hud-mini') as HTMLCanvasElement;
   private hpEl = el('div', 'hud-energy hud-hp', '<div class="hud-energy__fill"></div><span>Máu</span>');
   private bar = el('div', 'hud-bar');
@@ -115,7 +117,7 @@ export class Hud {
   selected = 0;
 
   constructor(private root: HTMLElement) {
-    root.append(this.nightEl, this.weatherEl, this.flash, this.banner, this.tut, this.clock, this.energy, this.hpEl, this.questsEl, this.mini, this.bar, this.hint, this.toastBox, this.fade, this.modal);
+    root.append(this.nightEl, this.weatherEl, this.flash, this.banner, this.tut, this.clock, this.energy, this.hpEl, this.questsEl, this.mini, this.coopEl, this.bar, this.hint, this.toastBox, this.fade, this.modal);
     for (let i = 0; i < HOTBAR; i++) {
       const b = el('button', 'slot');
       b.type = 'button';
@@ -204,6 +206,7 @@ export class Hud {
 
   /** Rương gỗ: bấm món trong túi để cất, bấm món trong rương để lấy ra. */
   openStorage(s: FarmState, k: string, note = '') {
+    if (!this.modal.classList.contains('show')) sfx('chest');
     const chest = chestOf(s, k);
     const used = chest.filter(Boolean).length;
     const box = el('div', 'panel inv storage', `<h2>Rương gỗ · ${used}/${CHEST_SIZE}</h2><p>${note || 'Bấm món trong túi để cất vào rương, bấm món trong rương để lấy ra (cả chồng).'}</p>`);
@@ -290,6 +293,7 @@ export class Hud {
   }
 
   private open(content: HTMLElement) {
+    if (!this.modal.classList.contains('show')) sfx('open');
     this.modal.replaceChildren(content);
     this.modal.classList.add('show');
     document.body.classList.add('hud-open');
@@ -331,6 +335,24 @@ export class Hud {
   }
   toggleMinimap() {
     writePref('minimap', readPref('minimap', '1') === '1' ? '0' : '1');
+  }
+
+  /** Thanh co-op: đang ở phòng của ai, bao nhiêu người, chat, rời phòng. */
+  coopBar() {
+    this.coopEl.classList.toggle('show', !!coop.role);
+    if (!coop.role) return this.coopEl.replaceChildren();
+    const names = [coop.role === 'host' ? 'bạn' : coop.hostName, ...others().filter((r) => !r.h).map((r) => r.n)];
+    const where = coop.role === 'host' ? 'Phòng co-op của bạn' : `Ở nông trại của ${coop.hostName}`;
+    this.coopEl.innerHTML = `<span><b>${where}</b> · ${others().length + 1}/4 người${coop.role === 'host' && !others().length ? ' · chờ bạn bè vào' : ''}</span>`;
+    this.coopEl.title = names.join(', ');
+    const chat = el('button', 'btn', 'Chat');
+    chat.addEventListener('click', () => {
+      const t = prompt('Nói gì với cả nhóm? (tối đa 80 chữ)');
+      if (t) { sendChat(t); this.toast(`Bạn: ${t.slice(0, 80)}`); }
+    });
+    const out = el('button', 'btn', coop.role === 'host' ? 'Đóng phòng' : 'Rời phòng');
+    out.addEventListener('click', () => { if (confirm(coop.role === 'host' ? 'Đóng phòng? Bạn bè trong phòng sẽ về nông trại của họ.' : 'Rời phòng, về nông trại của mình?')) leaveRoom(); });
+    this.coopEl.append(chat, out);
   }
 
   /** Thanh máu trong hang sâu; `null` là ẩn. */
@@ -898,6 +920,13 @@ export class Hud {
         } catch (e) { fail(e); }
       });
       addRow.append(code, add);
+      const room = el('button', 'btn btn--primary', coop.role ? (coop.role === 'host' ? 'Đang mở phòng co-op' : 'Đang ở phòng co-op') : 'Mở phòng co-op');
+      (room as HTMLButtonElement).disabled = !!coop.role;
+      room.title = 'Bạn bè bấm "Chơi cùng" để vào nông trại của bạn, cùng làm thời gian thực';
+      room.addEventListener('click', async () => {
+        try { await hostRoom(); this.close(); } catch (e) { fail(e); }
+      });
+      if (coopAvailable()) addRow.append(room);
       const out = el('button', 'btn', 'Đổi máy chủ / đăng xuất');
       out.addEventListener('click', () => { if (confirm('Quên mã bạn bè trên máy này? (Mã vẫn còn trên máy chủ)')) { net.saveIdentity(null); this.openFriends(s); } });
       row.append(close, out);
@@ -913,8 +942,14 @@ export class Hud {
           heart.addEventListener('click', async () => {
             try { const r = await net.likeFarm(f.code); heart.disabled = true; heart.textContent = `♥ ${r.likes}`; sfx('gift'); } catch (e) { fail(e); }
           });
+          const play = el('button', 'btn btn--primary', 'Chơi cùng') as HTMLButtonElement;
+          play.title = 'Vào nông trại của bạn này cùng làm (bạn ấy phải đang mở phòng co-op)';
+          play.disabled = !!coop.role;
+          play.addEventListener('click', async () => {
+            try { this.close(); await joinRoom(f.code); } catch (e) { this.toast((e as Error).message); }
+          });
           const b = el('button', 'btn', 'Ghé thăm') as HTMLButtonElement;
-          b.disabled = !f.updated;
+          b.disabled = !f.updated || !!coop.role;
           b.addEventListener('click', () => { this.close(); this.h.visit(f.code); });
           const more = el('button', 'btn', '⋯');
           more.title = 'Hủy kết bạn / chặn';
@@ -923,7 +958,7 @@ export class Hud {
             { label: 'Chặn', fn: () => net.blockFriend(f.code).then(() => { this.openFriends(s); this.toast(`Đã chặn ${f.name}`); }, (e) => this.toast((e as Error).message)) },
             { label: 'Thôi', primary: true, fn: () => this.openFriends(s) },
           ]));
-          r.append(heart, b, more);
+          r.append(heart, ...(coopAvailable() ? [play] : []), b, more);
           list.append(r);
         }
       });

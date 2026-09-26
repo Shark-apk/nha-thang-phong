@@ -13,3 +13,5 @@ server/friends.db*
 .agents/
 .claude/
 skills-lock.json
+.dev.vars
+.wrangler/

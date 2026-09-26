@@ -16,7 +16,7 @@ export interface Settings {
   dayMinutes: number;
 }
 
-const DEFAULTS: Settings = { music: 0.6, sfx: 0.8, uiScale: 1, cloud: true, keys: {}, reduceMotion: false, dayMinutes: 11 };
+const DEFAULTS: Settings = { music: 0.75, sfx: 0.8, uiScale: 1, cloud: true, keys: {}, reduceMotion: false, dayMinutes: 11 };
 
 function load(): Settings {
   try {
@@ -37,8 +37,13 @@ export function saveSettings() {
   applyUiScale();
 }
 
-/** Màn nhỏ (điện thoại) tự thu giao diện: giao diện vẽ cho màn ~1200×760. */
-export const fitScale = () => Math.max(0.5, Math.min(1, window.innerWidth / 1200, window.innerHeight / 760));
+/** Màn nhỏ (điện thoại) tự thu giao diện: giao diện vẽ cho màn ~1200×760.
+ *  Màn dọc (điện thoại cầm đứng) chỉ cần vừa bề ngang ~780 (thanh đồ 10 ô) nên không bị thu quá nhỏ. */
+export function fitScale() {
+  const w = window.innerWidth, h = window.innerHeight;
+  if (h > w) return Math.max(0.45, Math.min(1, w / 780, h / 1000));
+  return Math.max(0.5, Math.min(1, w / 1200, h / 760));
+}
 
 export function applyUiScale() {
   if (typeof document === 'undefined') return;
@@ -53,5 +58,11 @@ export function watchUiScale() {
   if (watching) return;
   watching = true;
   window.addEventListener('resize', applyUiScale);
+  // Xoay máy: iPhone hay báo cỡ cũ lúc vừa xoay, nên đo lại thêm một nhịp sau và báo Phaser đổi cỡ theo
+  window.addEventListener('orientationchange', () => {
+    applyUiScale();
+    setTimeout(() => window.dispatchEvent(new Event('resize')), 300);
+  });
+  window.visualViewport?.addEventListener('resize', applyUiScale);
   applyUiScale();
 }

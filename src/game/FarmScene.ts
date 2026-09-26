@@ -423,6 +423,21 @@ export class FarmScene extends WorldScene {
     return { tillable: free && (isTillable(this.world, x, y) || (onLand && nearWater)) && !giantAt(this.state, x, y), nearWater, soil: soilAt(x, y, this.state.map ?? 'plain') };
   }
 
+  /** Cây/đá ngoài đồng người khác vừa chặt (co-op): gỡ hình, thông đường. */
+  private refreshCleared() {
+    for (const node of new Set(this.nodes.values())) {
+      const { d } = node;
+      if (this.state.cleared[key(d.x, d.y)] === undefined) continue;
+      const [w, h] = decorSize(d.kind);
+      for (let yy = d.y; yy < d.y + h; yy++) for (let xx = d.x; xx < d.x + w; xx++) {
+        this.nodes.delete(key(xx, yy));
+        this.world.blocked[yy][xx] = false;
+        this.ctrl?.setBlocked(xx, yy, false);
+      }
+      node.img.destroy();
+    }
+  }
+
   private hitNode(t: Tile, node: { d: Decor; img: Phaser.GameObjects.Image; dmg: number }) {
     const r = strike(this.state, this.selected, node.d.kind, node.dmg);
     if (!r.ok) return this.hud.toast(r.reason);
@@ -572,6 +587,7 @@ export class FarmScene extends WorldScene {
   }
 
   refresh() {
+    this.refreshCleared();
     this.refreshSeason();
     this.refreshSoil();
     this.refreshCrops();

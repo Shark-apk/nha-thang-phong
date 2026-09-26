@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { TILE } from './world';
 import { PLAYER_TEX } from './playerSheet';
 import { worn } from './skills';
-import { sfx, type Sfx } from '../audio/sound';
+import { sfx, step, type Sfx, type Surface } from '../audio/sound';
 import { touchInput } from '../ui/touch';
 import { padInput } from './controls';
 
@@ -53,6 +53,9 @@ export class PlayerController {
   private path: Tile[] = [];
   private arrive: (() => void) | null = null;
   private stuck = { d: Infinity, t: 0 };
+  /** Mặt đất dưới chân (cảnh đặt) — chọn tiếng bước chân. */
+  surface: Surface = 'grass';
+  private lastStep = 0;
 
   constructor(private scene: Phaser.Scene, x: number, y: number, blocked: boolean[][], onClick: (t: Tile) => void) {
     ensureAnims(scene);
@@ -255,6 +258,9 @@ export class PlayerController {
         this.mouseTile = null;
         this.dir = Math.abs(vx) > Math.abs(vy) ? (vx > 0 ? 'right' : 'left') : vy > 0 ? 'down' : 'up';
         this.sprite.anims.play(`walk-${this.dir}`, true);
+        // Tiếng bước chân: đi chậm (cần điều khiển lệch ít) thì bước thưa hơn
+        const now = this.scene.time.now;
+        if (now - this.lastStep > 300 / Math.max(0.5, Math.min(1, Math.hypot(vx * k, vy * k)))) { this.lastStep = now; step(this.surface); }
       } else this.sprite.anims.play(`idle-${this.dir}`, true);
     }
     this.sprite.setDepth(this.sprite.body!.y + 7);

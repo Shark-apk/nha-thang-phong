@@ -1,6 +1,6 @@
 // Luật server bạn bè: người chơi, bạn bè, ảnh chụp nông trại, tưới giúp, quà, xếp hạng, thả tim, thi đấu, chợ.
 // `db` là kho dữ liệu trong store.mjs (SQLite trên máy, Postgres trên Vercel) — mọi hàm đều bất đồng bộ.
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, createHmac, randomBytes } from 'node:crypto';
 import { isDuplicate, openSqlite } from './store.mjs';
 
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // bỏ chữ dễ nhầm (0/O, 1/I)
@@ -331,4 +331,23 @@ export async function logError(db, e, now = Date.now()) {
     if (keep) await db.run('DELETE FROM errors WHERE id < ?', [keep.id]);
   }
   return { ok: true };
+}
+
+// ---------------------------------------------------------------- co-op: vé vào phòng
+
+export const TICKET_MS = 6 * 3_600_000;
+const b64url = (b) => Buffer.from(b).toString('base64url');
+
+/**
+ * Vé vào phòng co-op của nông trại `room` (mã bạn bè chủ phòng): chỉ chủ phòng hoặc bạn bè của chủ phòng.
+ * Ký HMAC-SHA256 bằng `secret` chung với máy chủ phòng (Cloudflare) — định dạng base64url(JSON).chữ ký.
+ */
+export async function coopTicket(db, me, room, secret, now = Date.now()) {
+  if (!secret) throw new FriendsError(503, 'Chưa bật co-op trên máy chủ');
+  const host = await byCode(db, room);
+  const isHost = host.id === me.id;
+  if (!isHost && !(await isFriend(db, me.id, host.id))) throw new FriendsError(403, 'Chỉ vào được phòng của bạn bè');
+  const body = b64url(JSON.stringify({ c: me.code, n: me.name, r: host.code, h: isHost, e: now + TICKET_MS }));
+  const sig = createHmac('sha256', secret).update(body).digest('base64url');
+  return { ticket: `${body}.${sig}`, room: host.code, host: isHost, hostName: host.name };
 }

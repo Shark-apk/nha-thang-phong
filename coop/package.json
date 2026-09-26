@@ -1,0 +1,20 @@
+{
+  "name": "nha-thang-phong-coop",
+  "version": "1.0.0",
+  "description": "",
+  "scripts": {
+    "dev": "wrangler dev --port 8789 --var COOP_SECRET:dev-secret",
+    "deploy": "wrangler deploy",
+    "check": "tsc"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260926.1",
+    "typescript": "^7.0.2",
+    "wrangler": "^4.141.0"
+  },
+  "private": true,
+  "type": "module"
+}
