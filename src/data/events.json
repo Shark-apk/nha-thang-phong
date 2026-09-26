@@ -1,0 +1,105 @@
+{
+  "_ghi_chu": "Lịch sự kiện theo ngày thật (lặp lại mỗi năm). Thêm sự kiện = thêm 1 mục vào 'events'. start/end dạng MM-DD. quests.event: till, water, plant, harvest, sell, fish, cook, craft, chop, mine, talk, gift, collect, order, donate, help. shop.kind: piece (vào tủ đồ), item/decor (vào túi), pet.",
+  "events": [
+    {
+      "id": "tet", "name": "Hội chợ Tết", "start": "01-20", "end": "02-20", "color": "#b8302a",
+      "intro": "Gói bánh chưng, lì xì dân làng, trang hoàng nhà cửa đón năm mới.",
+      "quests": [
+        { "event": "cook", "n": 5, "text": "Nấu 5 món ăn Tết", "tem": 20 },
+        { "event": "talk", "n": 8, "text": "Chúc Tết 8 dân làng", "tem": 15 },
+        { "event": "plant", "n": 30, "text": "Gieo 30 hạt đầu năm", "tem": 15 },
+        { "event": "gift", "n": 5, "text": "Tặng 5 món quà Tết", "tem": 20 },
+        { "event": "sell", "n": 5000, "text": "Bán hàng được 5.000 xu", "tem": 25 }
+      ],
+      "shop": [
+        { "kind": "piece", "id": "shirt_4", "name": "Áo vàng may mắn", "price": 40 },
+        { "kind": "item", "id": "sapling_mango", "name": "Cây giống xoài", "price": 30 },
+        { "kind": "item", "id": "seed_peach_blossom", "name": "Hạt hoa đào", "qty": 5, "price": 20 },
+        { "kind": "decor", "id": "deco_windmill", "name": "Cối xay gió nhỏ", "price": 35 },
+        { "kind": "item", "id": "banh_chung", "name": "Bánh chưng", "qty": 2, "price": 15 }
+      ]
+    },
+    {
+      "id": "hoa", "name": "Hội hoa xuân", "start": "03-01", "end": "03-20", "color": "#d05a8a",
+      "intro": "Trồng hoa, tặng hoa, làng rực rỡ sắc xuân.",
+      "quests": [
+        { "event": "plant", "n": 20, "text": "Gieo 20 hạt", "tem": 15 },
+        { "event": "harvest", "n": 30, "text": "Thu hoạch 30 nông sản", "tem": 20 },
+        { "event": "gift", "n": 4, "text": "Tặng 4 món quà", "tem": 15 }
+      ],
+      "shop": [
+        { "kind": "piece", "id": "hat_flower", "name": "Hoa cài", "price": 30 },
+        { "kind": "decor", "id": "deco_pot", "name": "Chậu hoa", "price": 10 },
+        { "kind": "item", "id": "seed_sunflower", "name": "Hạt hướng dương", "qty": 10, "price": 15 }
+      ]
+    },
+    {
+      "id": "he", "name": "Mùa hè biển", "start": "06-01", "end": "06-30", "color": "#3f7fbf",
+      "intro": "Nắng hè rực rỡ: câu cá, ăn dưa hấu, đi chơi biển.",
+      "quests": [
+        { "event": "fish", "n": 15, "text": "Câu 15 con cá", "tem": 25 },
+        { "event": "harvest", "n": 40, "text": "Thu hoạch 40 nông sản", "tem": 20 },
+        { "event": "water", "n": 150, "text": "Tưới 150 ô giữa trời nắng", "tem": 15 },
+        { "event": "cook", "n": 3, "text": "Nấu 3 món giải nhiệt", "tem": 15 },
+        { "event": "order", "n": 3, "text": "Giao 3 đơn ở bảng tin", "tem": 20 }
+      ],
+      "shop": [
+        { "kind": "piece", "id": "face_sunglasses", "name": "Kính râm", "price": 30 },
+        { "kind": "pet", "id": "pet_crab", "name": "Cua cưng", "price": 60 },
+        { "kind": "item", "id": "seed_watermelon", "name": "Hạt dưa hấu", "qty": 5, "price": 15 },
+        { "kind": "item", "id": "rod_2", "name": "Cần câu sợi", "price": 40 }
+      ]
+    },
+    {
+      "id": "trung_thu", "name": "Trung Thu rước đèn", "start": "09-01", "end": "09-30", "color": "#e0a030",
+      "intro": "Làm bánh trung thu, rước đèn ông sao, phá cỗ dưới trăng.",
+      "quests": [
+        { "event": "cook", "n": 3, "text": "Làm 3 cái bánh", "tem": 20 },
+        { "event": "gift", "n": 5, "text": "Tặng 5 món quà Trung Thu", "tem": 20 },
+        { "event": "harvest", "n": 40, "text": "Thu hoạch 40 nông sản mùa gặt", "tem": 15 }
+      ],
+      "shop": [
+        { "kind": "item", "id": "star_lantern", "name": "Đèn ông sao", "price": 10 },
+        { "kind": "piece", "id": "hat_bow", "name": "Nơ xanh", "price": 30 },
+        { "kind": "decor", "id": "deco_lamp", "name": "Đèn đứng", "price": 20 }
+      ]
+    },
+    {
+      "id": "halloween", "name": "Halloween bí ngô", "start": "10-20", "end": "10-31", "color": "#c86a1a",
+      "intro": "Trồng bí ngô thật to, đi hang đá tìm đồ lạ.",
+      "quests": [
+        { "event": "mine", "n": 40, "text": "Đập 40 tảng đá trong hang", "tem": 20 },
+        { "event": "harvest", "n": 20, "text": "Thu hoạch 20 nông sản", "tem": 15 }
+      ],
+      "shop": [
+        { "kind": "piece", "id": "face_mustache", "name": "Ria mép", "price": 25 },
+        { "kind": "item", "id": "seed_pumpkin", "name": "Hạt bí ngô", "qty": 5, "price": 15 }
+      ]
+    },
+    {
+      "id": "noel", "name": "Noel tuyết trắng", "start": "12-15", "end": "12-31", "color": "#3a8a5a",
+      "intro": "Tuyết rơi, trao quà, trang trí nông trại lung linh.",
+      "quests": [
+        { "event": "gift", "n": 6, "text": "Tặng 6 món quà", "tem": 20 },
+        { "event": "craft", "n": 3, "text": "Làm 3 món đồ thủ công", "tem": 15 },
+        { "event": "help", "n": 10, "text": "Tưới giúp bạn bè 10 ô", "tem": 20 }
+      ],
+      "shop": [
+        { "kind": "piece", "id": "hat_beanie", "name": "Mũ len", "price": 30 },
+        { "kind": "piece", "id": "shirt_5", "name": "Áo trắng tuyết", "price": 30 },
+        { "kind": "decor", "id": "deco_statue", "name": "Tượng nghê đá", "price": 50 }
+      ]
+    }
+  ],
+  "pass": {
+    "pointsPerTier": 50,
+    "tiers": [
+      { "money": 200 }, { "tem": 5 }, { "item": "fertilizer", "qty": 10 }, { "money": 300 }, { "piece": "face_glasses" },
+      { "tem": 10 }, { "item": "seed_strawberry", "qty": 10 }, { "money": 500 }, { "item": "sprinkler", "qty": 2 }, { "piece": "hat_non_la" },
+      { "money": 600 }, { "tem": 10 }, { "item": "ore_iron", "qty": 5 }, { "money": 800 }, { "piece": "shirt_8" },
+      { "tem": 15 }, { "item": "sprinkler_2", "qty": 2 }, { "money": 1000 }, { "item": "gem", "qty": 1 }, { "piece": "hat_chef" },
+      { "money": 1200 }, { "tem": 15 }, { "item": "ore_gold", "qty": 5 }, { "money": 1500 }, { "piece": "shirt_9" },
+      { "tem": 20 }, { "item": "sprinkler_3", "qty": 2 }, { "money": 2000 }, { "item": "deco_statue", "qty": 1 }, { "piece": "hat_crown" }
+    ]
+  }
+}

@@ -1,0 +1,217 @@
+:root {
+  --ink: #3b2a2e;
+  --paper: #f4e7c8;
+  --paper-2: #e9d6ab;
+  --edge: #8e5b3f;
+  --accent: #c0563b;
+  --font: 'VT323', ui-monospace, monospace;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: #9bd4c3; font-family: var(--font); color: var(--ink); }
+#game, #game canvas { position: fixed; inset: 0; image-rendering: pixelated; }
+#ui { position: fixed; inset: 0; pointer-events: none; zoom: var(--ui-scale, 1); }
+#ui button, #ui .panel { pointer-events: auto; }
+kbd { font-family: var(--font); padding: 0 5px; border: 2px solid currentColor; border-radius: 4px; font-size: 0.9em; }
+
+.hud-clock {
+  position: absolute; top: 14px; right: 14px; min-width: 150px; padding: 8px 14px;
+  background: var(--paper); border: 3px solid var(--edge); border-radius: 8px; box-shadow: 0 4px 0 rgba(59, 42, 46, 0.35);
+  display: flex; flex-direction: column; align-items: flex-end; line-height: 1;
+}
+.hud-clock b { font-size: 24px; }
+.hud-clock span { font-size: 40px; }
+.hud-clock span.late { color: var(--accent); }
+.hud-clock em { font-style: normal; font-size: 26px; color: #6b4a1c; }
+
+.hud-energy {
+  position: absolute; right: 22px; bottom: 22px; width: 30px; height: 160px; padding: 3px;
+  background: var(--paper); border: 3px solid var(--edge); border-radius: 8px; display: flex; flex-direction: column; justify-content: flex-end;
+}
+.hud-energy__fill { width: 100%; background: #7cb342; border-radius: 3px; transition: height 250ms ease; }
+.hud-energy__fill.low { background: var(--accent); }
+.hud-hp { right: 64px; display: none; }
+.hud-hp.show { display: flex; }
+.hud-hp .hud-energy__fill { background: #e0524a; }
+.hud-hp .hud-energy__fill.low { background: #8a1a1a; }
+.hud-energy span { position: absolute; top: -26px; left: 50%; transform: translateX(-50%); font-size: 22px; color: var(--paper); text-shadow: 0 2px 0 var(--ink); }
+
+.hud-bar { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); display: flex; gap: 4px; padding: 6px; background: var(--paper); border: 3px solid var(--edge); border-radius: 10px; box-shadow: 0 4px 0 rgba(59, 42, 46, 0.35); }
+.slot { position: relative; width: 60px; height: 60px; padding: 0; border: 3px solid var(--paper-2); border-radius: 6px; background: #f9efd6; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.slot--on { border-color: var(--accent); background: #fff6df; }
+.slot i { width: 48px; height: 48px; display: block; image-rendering: pixelated; }
+.slot__key { position: absolute; left: 4px; top: 0; font-size: 16px; color: #9a7a5a; }
+.slot__qty { position: absolute; right: 4px; bottom: 0; font-size: 22px; color: var(--ink); text-shadow: 1px 1px 0 #fff; }
+.hud-hint { position: absolute; left: 50%; bottom: 96px; transform: translateX(-50%); font-size: 20px; color: #fff; text-shadow: 0 2px 0 rgba(0, 0, 0, 0.45); white-space: nowrap; }
+.slot__water { position: absolute; left: 6px; right: 6px; bottom: 3px; height: 5px; background: #d9c9a6; border-radius: 3px; overflow: hidden; }
+.slot__water span { display: block; height: 100%; background: #5aa7c8; }
+.hud-shop-btn { position: absolute; top: 14px; left: 14px; height: 44px; padding: 0 14px; font-family: var(--font); font-size: 24px; color: var(--ink); background: var(--paper); border: 3px solid var(--edge); border-radius: 8px; cursor: pointer; box-shadow: 0 4px 0 rgba(59, 42, 46, 0.35); }
+
+.hud-toast { position: absolute; left: 50%; top: 18px; transform: translate(-50%, -20px); padding: 8px 18px; background: var(--ink); color: var(--paper); border-radius: 8px; font-size: 24px; opacity: 0; transition: opacity 200ms, transform 200ms; max-width: 70vw; text-align: center; }
+.hud-toast.show { opacity: 1; transform: translate(-50%, 0); }
+.hud-night { position: absolute; inset: 0; background: #14204a; mix-blend-mode: multiply; opacity: 0; transition: opacity 2s linear; }
+.hud-fade { position: absolute; inset: 0; background: #120c16; opacity: 0; transition: opacity 800ms ease; display: flex; align-items: center; justify-content: center; }
+.hud-fade.show { opacity: 1; pointer-events: auto; }
+.hud-fade span { color: var(--paper); font-size: 40px; text-align: center; padding: 0 40px; }
+
+.hud-modal { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(20, 12, 22, 0.45); pointer-events: auto; }
+.hud-modal.show { display: flex; }
+.panel { background: var(--paper); border: 4px solid var(--edge); border-radius: 12px; padding: 22px 28px; min-width: 380px; max-width: 640px; box-shadow: 0 8px 0 rgba(59, 42, 46, 0.4); display: flex; flex-direction: column; gap: 12px; }
+.panel h2 { margin: 0; font-size: 40px; font-weight: normal; }
+.panel p { margin: 0; font-size: 24px; line-height: 1.1; }
+.row { display: flex; gap: 10px; }
+.btn { height: 48px; padding: 0 18px; font-family: var(--font); font-size: 26px; color: var(--ink); background: var(--paper-2); border: 3px solid var(--edge); border-radius: 8px; cursor: pointer; }
+.btn--primary { background: var(--accent); color: #fff4e0; border-color: #7e3322; }
+.btn:focus-visible, .slot:focus-visible { outline: 3px solid #3f7fbf; outline-offset: 2px; }
+.shop__list { display: flex; flex-direction: column; gap: 8px; max-height: min(62vh, 560px); overflow-y: auto; padding-right: 4px; }
+.shop__row { display: flex; align-items: center; gap: 10px; padding: 6px 8px; background: #f9efd6; border: 2px solid var(--paper-2); border-radius: 8px; }
+.shop__row i { width: 48px; height: 48px; image-rendering: pixelated; flex-shrink: 0; }
+.shop__row div { flex-grow: 1; display: flex; flex-direction: column; font-size: 24px; line-height: 1; }
+.shop__row span { color: #7a5a3a; }
+.shop__row .btn { height: 40px; padding: 0 10px; font-size: 22px; }
+
+.title { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(40, 70, 60, 0.45); }
+.title .panel { align-items: center; text-align: center; }
+.title h1 { margin: 0; font-size: 72px; font-weight: normal; line-height: 0.9; color: var(--ink); }
+.title .credit { font-size: 18px; color: #7a5a3a; }
+
+/* ---------------------------------------------------------------- mùa & thời tiết (mốc 4) */
+.hud-clock small { font-size: 20px; color: #7a5a3a; }
+.season-spring { color: #c0476a; } .season-summer { color: #a8740e; } .season-fall { color: #a0501f; } .season-winter { color: #3f7fa0; }
+.slot__q { position: absolute; left: 4px; bottom: 4px; width: 10px; height: 10px; border-radius: 2px; transform: rotate(45deg); border: 1px solid #3b2a2e; }
+.slot__q.q1 { background: #cfd6dc; } .slot__q.q2 { background: #f0c850; }
+.hud-weather { position: absolute; inset: 0; pointer-events: none; transition: background 1s; }
+.hud-weather.w-rain { background: rgba(40, 60, 90, 0.18); }
+.hud-weather.w-storm { background: rgba(25, 30, 60, 0.32); }
+.hud-weather.w-snow { background: rgba(220, 235, 255, 0.12); }
+.hud-flash { position: absolute; inset: 0; pointer-events: none; background: #fff; opacity: 0; }
+.hud-flash.go { animation: flash 600ms ease-out; }
+@keyframes flash { 0% { opacity: 0; } 10% { opacity: 0.8; } 25% { opacity: 0.1; } 35% { opacity: 0.6; } 100% { opacity: 0; } }
+.cal__grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.cal__day { height: 64px; padding: 4px 6px; background: #f9efd6; border: 2px solid var(--paper-2); border-radius: 6px; display: flex; flex-direction: column; font-size: 20px; line-height: 1; }
+.cal__day b { font-weight: normal; font-size: 26px; }
+.cal__day span { color: #3f7fa0; margin-top: auto; }
+.cal__day.today { border-color: var(--accent); background: #fff6df; }
+.cal__day.past { opacity: 0.45; }
+
+.tabs { display: flex; gap: 6px; }
+.tab { height: 40px; padding: 0 14px; font-family: var(--font); font-size: 22px; color: var(--ink); background: var(--paper-2); border: 3px solid var(--edge); border-radius: 8px 8px 0 0; cursor: pointer; }
+.tab--on { background: var(--accent); color: #fff4e0; border-color: #7e3322; }
+.shop__build { background: repeating-linear-gradient(45deg, #b8554a 0 6px, #8e3d36 6px 12px); border-radius: 6px; }
+.btn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+/* ---------------------------------------------------------------- túi đồ, chế tạo, thợ rèn (mốc 6) */
+.slot__tier { position: absolute; right: 4px; top: 4px; width: 9px; height: 9px; border-radius: 50%; border: 1px solid #3b2a2e; }
+.slot__tier.t1 { background: #d08a52; } .slot__tier.t2 { background: #b8c4d0; } .slot__tier.t3 { background: #f0c850; }
+.inv { max-width: 680px; }
+.inv__grid { display: grid; grid-template-columns: repeat(9, 60px); gap: 6px; }
+.inv__grid .slot--hot { background: #fff2cf; }
+.inv__grid .slot--on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+.inv__tools { font-size: 22px !important; color: #7a5a3a; }
+.inv__tools b { font-weight: normal; color: var(--ink); }
+.shop__row .needs { font-size: 20px; }
+.shop__row .needs .have { color: #4f7a2e; } .shop__row .needs .lack { color: #b04a3a; }
+.shop__bag { background: radial-gradient(circle at 50% 60%, #b8864a 0 16px, #8a5a36 17px 20px, transparent 21px); }
+@media (max-width: 720px) { .inv__grid { grid-template-columns: repeat(6, 52px); } .inv__grid .slot { width: 52px; height: 52px; } }
+
+/* ---------------------------------------------------------------- dân làng (mốc 7) */
+.talk { flex-direction: row; align-items: flex-start; gap: 18px; max-width: 720px; }
+.talk__face { width: 96px; height: 96px; flex-shrink: 0; background: url('/Custom/portraits.png') #f9efd6; background-size: 768px auto; image-rendering: pixelated; border: 3px solid var(--edge); border-radius: 8px; }
+.talk__body { display: flex; flex-direction: column; gap: 10px; flex-grow: 1; }
+.talk__body > b { font-size: 30px; font-weight: normal; }
+.talk__body p { font-size: 26px !important; line-height: 1.15 !important; }
+.talk__hearts { color: #d9485a; font-size: 20px; letter-spacing: 1px; }
+.talk__hearts i { color: #d8c8b0; font-style: normal; }
+.talk__event { color: #b04a3a; font-style: normal; font-size: 22px; }
+.talk__reward { color: #4f7a2e; font-weight: normal; }
+.rel__face { background: url('/Custom/portraits.png') #f9efd6; background-size: 384px auto; border: 2px solid var(--edge); border-radius: 6px; }
+.shop__owner { font-weight: normal; font-size: 30px; }
+.cal__day em { font-style: normal; font-size: 16px; color: #b04a3a; }
+.shop__row s { color: #b9a584; }
+
+/* ---------------------------------------------------------------- mốc 8: câu cá, bếp, đình, bầu cua */
+.fishing { align-items: center; min-width: 320px; }
+.fishing__game { display: flex; gap: 14px; user-select: none; touch-action: none; cursor: pointer; }
+.fishing__track { position: relative; width: 60px; height: 320px; background: linear-gradient(#5aa7c8, #2f6f8f); border: 4px solid var(--edge); border-radius: 10px; overflow: hidden; }
+.fishing__zone { position: absolute; left: 3px; right: 3px; background: rgba(140, 220, 110, 0.55); border: 2px solid #d8ffc0; border-radius: 6px; }
+.fishing__fish { position: absolute; left: 14px; width: 32px; height: 32px; image-rendering: pixelated; }
+.fishing__prog { position: relative; width: 18px; height: 320px; background: #d9c9a6; border: 3px solid var(--edge); border-radius: 6px; overflow: hidden; }
+.fishing__prog span { position: absolute; left: 0; right: 0; bottom: 0; background: #f0b474; }
+.fishing__hint { font-size: 20px !important; color: #7a5a3a; }
+.fishbook__head { margin-top: 8px !important; font-size: 26px !important; }
+.fish--unknown i { filter: brightness(0) opacity(0.35); }
+.bundle { padding: 8px 10px; background: #f9efd6; border: 2px solid var(--paper-2); border-radius: 8px; font-size: 24px; }
+.bundle span { color: #7a5a3a; }
+.bundle--done { background: #e4f0cf; }
+.bundle__items { display: flex; gap: 6px; margin-top: 6px; }
+.slot--full { background: #d8ecc0; }
+.slot:disabled { cursor: default; }
+.baucua { align-items: center; }
+.baucua__board { display: grid; grid-template-columns: repeat(3, 72px); gap: 8px; }
+.baucua__board .slot { width: 72px; height: 72px; }
+.baucua__board .slot__key { top: auto; bottom: 0; left: 0; right: 0; text-align: center; color: var(--ink); }
+.baucua__dice { display: flex; gap: 8px; align-items: center; }
+.baucua__dice i { width: 64px; height: 64px; background-color: #fff; border: 3px solid var(--edge); border-radius: 8px; image-rendering: pixelated; }
+.baucua__dice b { font-weight: normal; font-size: 30px; margin-left: 10px; }
+.baucua__dice .win { color: #4f7a2e; } .baucua__dice .lose { color: #b04a3a; }
+
+/* ---------------------------------------------------------------- bạn bè (mốc 9) */
+.field { height: 44px; padding: 0 12px; font-family: var(--font); font-size: 24px; color: var(--ink); background: #fffaf0; border: 3px solid var(--edge); border-radius: 8px; flex-grow: 1; }
+.friends__label { font-size: 20px; color: #7a5a3a; margin-bottom: -8px; }
+.friends__err { color: #b04a3a; min-height: 24px; }
+.friends__code { font-weight: normal; font-size: 34px; letter-spacing: 3px; color: var(--accent); }
+.friends small { font-size: 18px; color: #9a7a5a; }
+.hud-banner { position: absolute; left: 50%; top: 70px; transform: translateX(-50%); padding: 6px 16px; background: #3f7fbf; color: #fff; border-radius: 8px; font-size: 22px; opacity: 0; transition: opacity 300ms; pointer-events: none; }
+.hud-banner.show { opacity: 1; }
+
+/* ---------------------------------------------------------------- hoàn thiện (mốc 10) */
+.hud-hint { white-space: normal; text-align: center; max-width: calc(100vw - 180px); }
+.hud-tut { position: absolute; left: 14px; top: 14px; width: 340px; padding: 12px 14px; background: var(--paper); border: 3px solid #3f7fbf; border-radius: 10px; box-shadow: 0 4px 0 rgba(59, 42, 46, 0.35); display: none; flex-direction: column; gap: 6px; pointer-events: auto; }
+.hud-tut.show { display: flex; }
+.hud-tut b { font-weight: normal; font-size: 24px; color: #3f7fbf; }
+.hud-tut p { margin: 0; font-size: 22px; line-height: 1.1; }
+.hud-tut p b { font-size: inherit; color: var(--accent); }
+.hud-tut .btn { height: 34px; font-size: 20px; align-self: flex-start; }
+.help td { padding: 2px 10px 2px 0; font-size: 22px; vertical-align: top; }
+.set__row { display: flex; align-items: center; gap: 12px; font-size: 24px; }
+.set__row > span { width: 130px; }
+.set__row input[type=range] { flex-grow: 1; accent-color: var(--accent); }
+.set__note { color: #7a5a3a; font-size: 20px !important; }
+.slots { display: flex; flex-direction: column; gap: 8px; width: 100%; }
+.slot-card { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: #f9efd6; border: 2px solid var(--paper-2); border-radius: 8px; text-align: left; font-size: 22px; }
+.slot-card div { flex-grow: 1; display: flex; flex-direction: column; line-height: 1.05; }
+.slot-card span { color: #7a5a3a; }
+.credits { max-width: 560px; text-align: left !important; }
+.credits p { font-size: 22px !important; }
+
+/* ---------------------------------------------------------------- bản đồ thế giới & chợ huyện (mốc 14) */
+.worldmap { max-width: 980px; }
+.wm { position: relative; width: min(900px, 86vw); aspect-ratio: 320 / 200; background: url('/Custom/phase2/world.png') 0 0 / 100% 100%; image-rendering: pixelated; border: 4px solid var(--edge); border-radius: 12px; }
+.wm__pin { position: absolute; transform: translate(-50%, -100%); display: flex; flex-direction: column; align-items: center; padding: 2px 10px; font-family: var(--font); color: var(--ink); background: var(--paper); border: 3px solid var(--edge); border-radius: 8px; cursor: pointer; white-space: nowrap; }
+.wm__pin b { font-weight: normal; font-size: 22px; line-height: 1; }
+.wm__pin small { font-size: 16px; color: #7a5a3a; }
+.wm__pin--here { background: var(--accent); border-color: #7e3322; }
+.wm__pin--here b, .wm__pin--here small { color: #fff4e0; }
+.wm__pin--lock { background: #5e4032; border-color: #3b2a2e; }
+.wm__pin--lock b, .wm__pin--lock small { color: #e9d6ab; }
+.wm__pin:disabled { cursor: default; }
+.wm__pin:not(:disabled):hover { border-color: var(--accent); }
+.shop__piece { background: #f9efd6; border: 2px solid #e9d6ab; border-radius: 6px; }
+
+/* ---------------------------------------------------------------- khách mời (mốc 16) */
+.talk__face--guest { background-image: url('/Custom/phase2/guests.png'); background-size: 1152px 192px; image-rendering: pixelated; }
+.talk__guest { font-size: 20px; color: #3f7fbf; }
+.stage { align-items: center; text-align: center; min-width: 520px; }
+.stage__curtain { width: 460px; padding: 18px 0 12px; background: repeating-linear-gradient(90deg, #8e1f1a 0 18px, #b8302a 18px 36px); border: 5px solid #5e1410; border-radius: 12px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.stage__star { width: 96px; height: 96px; border: 4px solid #f0c040; border-radius: 10px; background-color: #fbe3b0; animation: dance 0.6s ease-in-out infinite alternate; }
+@keyframes dance { from { transform: translateY(0) rotate(-4deg); } to { transform: translateY(-8px) rotate(4deg); } }
+.stage__lyric { margin: 0; padding: 4px 14px; background: rgba(59, 42, 46, 0.85); color: #fff4e0; border-radius: 8px; font-size: 26px !important; }
+.slot__q.q3 { background: #5ad0f0; box-shadow: 0 0 4px #9ff; }
+
+/* Mốc 19: xếp hạng, thi đấu, chợ */
+.rank__by { flex-wrap: wrap; }
+.rank__by .tab { height: 32px; font-size: 18px; border-radius: 8px; }
+.rank__pos { width: 40px; font-size: 26px; text-align: center; flex-shrink: 0; }
+.rank__val { font-size: 28px; color: var(--accent); flex-shrink: 0; }
+.rank--me { border-color: var(--accent); background: #fff6df; }
+.market__sell { align-items: center; flex-wrap: wrap; font-size: 22px; color: #7a5a3a; }
+.market__sell .field { width: 110px; }

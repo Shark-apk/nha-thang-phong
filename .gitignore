@@ -1,0 +1,5 @@
+node_modules
+dist
+# Sprout Lands (Cup Nooble) — giấy phép không cho phát tán lại bộ hình
+assets/
+server/friends.db*
