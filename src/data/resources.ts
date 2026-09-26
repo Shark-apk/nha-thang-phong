@@ -70,7 +70,7 @@ export const REGROW_DAYS = 7;
 
 // ---------------------------------------------------------------- máy & chế tạo
 export type MachineId = 'sprinkler' | 'sprinkler_2' | 'sprinkler_3' | 'scarecrow' | 'preserves_jar' | 'keg' | 'dehydrator' | 'mill'
-  | 'tea_sifter' | 'roaster' | 'cane_press' | 'mushroom_house' | 'salt_pan';
+  | 'tea_sifter' | 'roaster' | 'cane_press' | 'mushroom_house' | 'salt_pan' | 'storage';
 export const MACHINES: Record<MachineId, { name: string; info: string; days?: number }> = {
   sprinkler: { name: 'Vòi tưới', info: 'tưới 4 ô kề mỗi sáng' },
   sprinkler_2: { name: 'Vòi tưới đồng', info: 'tưới 8 ô xung quanh mỗi sáng' },
@@ -85,6 +85,7 @@ export const MACHINES: Record<MachineId, { name: string; info: string; days?: nu
   cane_press: { name: 'Máy ép mía', info: '1 cây mía → 1 ly nước mía · 1 ngày', days: 1 },
   mushroom_house: { name: 'Nhà nấm', info: 'tự mọc 2 nấm rơm mỗi 2 ngày' },
   salt_pan: { name: 'Ruộng muối', info: 'tự làm 3 muối mỗi 2 ngày (ngày nắng)' },
+  storage: { name: 'Rương gỗ', info: 'cất 36 món đồ' },
 };
 for (const [id, m] of Object.entries(MACHINES)) ITEMS[id] = { id, name: m.name, kind: 'machine', sell: 0, buy: 0, icon: icon(id as keyof typeof ICONS) };
 
@@ -94,6 +95,7 @@ export const RECIPES: Recipe[] = [
   { id: 'sprinkler_2', needs: [['stone', 5], ['ore_copper', 1], ['ore_iron', 1]] },
   { id: 'sprinkler_3', needs: [['stone', 5], ['ore_iron', 1], ['ore_gold', 1]] },
   { id: 'scarecrow', needs: [['wood', 25], ['hay', 2]] },
+  { id: 'storage', needs: [['wood', 50]] },
   { id: 'preserves_jar', needs: [['wood', 30], ['stone', 10], ['ore_copper', 1]] },
   { id: 'keg', needs: [['wood', 30], ['ore_copper', 1], ['ore_iron', 1]] },
   { id: 'dehydrator', needs: [['wood', 20], ['stone', 20]] },

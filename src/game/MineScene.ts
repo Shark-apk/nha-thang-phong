@@ -11,6 +11,7 @@ import { session } from './session';
 import { levelOf } from './profile';
 import { emit } from './bus';
 import { sfx } from '../audio/sound';
+import { settings } from '../ui/settings';
 import ICONS from '../../assets/Custom/icons.json';
 
 const W = 22;
@@ -273,7 +274,7 @@ export class MineScene extends WorldScene {
     this.hurtAt = this.time.now;
     hp -= n;
     sfx('hurt');
-    this.cameras.main.shake(120, 0.006);
+    if (!settings.reduceMotion) this.cameras.main.shake(120, 0.006);
     this.ctrl.sprite.setTint(0xff8080);
     this.time.delayedCall(200, () => this.ctrl.sprite.clearTint());
     const pl = this.ctrl.sprite;

@@ -6,6 +6,7 @@ import { strike } from './resources';
 import { dive, donateTrash, forageToday, pickForage, SKY_X, takenToday } from './regions';
 import { AUTOTILE, neighborMask, TILE } from './world';
 import { WorldScene } from './WorldScene';
+import { settings } from '../ui/settings';
 
 /** Cắt thêm frame cây nhiều ô từ Basic_Grass_Biom_things.png (một lần cho cả game). */
 export function ensureBiomeFrames(scene: Phaser.Scene) {
@@ -312,7 +313,7 @@ export class SeaScene extends RegionScene {
     if (DIVE_SPOTS.some(([x, y]) => x === t.x && y === t.y)) {
       const r = dive(this.state);
       if (!r.ok) return this.hud.toast(r.reason);
-      this.cameras.main.flash(250, 120, 200, 255);
+      if (!settings.reduceMotion) this.cameras.main.flash(250, 120, 200, 255);
       this.popItem(t, r.item);
       this.hud.toast(`Lặn xuống… mò được ${ITEMS[r.item].name.toLowerCase()}`);
       return this.renderHud();

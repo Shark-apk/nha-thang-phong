@@ -11,9 +11,10 @@ import { animalsIn, capacityOf, collectFish, collectHoney, grazingToday, hearts,
 import { critterAt, refreshBubble, spawnCritters, type Critter } from './critters';
 import type { Tile } from './player';
 import {
-  AUTOTILE, buildWorld, decorSize, MAP_TINT, soilAt, FENCE_TILE, inCave, inShop, inWell, isTillable, isWater, lotAt, lotDoor, MAP_H, MAP_W, neighborMask, TILE,
+  AUTOTILE, buildWorld, decorSize, GRASS_PALETTE, GROUND, MAP_TINT, RED_PALETTE, SAND_PALETTE, soilAt, FENCE_TILE, inCave, inShop, inWell, isTillable, isWater, lotAt, lotDoor, MAP_H, MAP_W, neighborMask, TILE,
   type Decor, type World,
 } from './world';
+import { recolorGrass } from './RegionScenes';
 import { WorldScene } from './WorldScene';
 
 /** Nhân hai màu tint (theo từng kênh). */
@@ -101,7 +102,13 @@ export class FarmScene extends WorldScene {
     const w = this.world;
     const map = this.make.tilemap({ width: MAP_W, height: MAP_H, tileWidth: TILE, tileHeight: TILE });
     const water = map.addTilesetImage('water', 'water', TILE, TILE, 0, 0, 1)!;
-    const grass = map.addTilesetImage('grass', 'grass', TILE, TILE, 0, 0, 100)!;
+    // Cỏ theo bản đồ + bãi cát + đất đỏ: đổi màu tileset cỏ lúc chạy
+    const pal = GRASS_PALETTE[this.state.map ?? 'plain'];
+    const grassKey = pal ? recolorGrass(this, `grass-${this.state.map}`, pal[0], pal[1]) : 'grass';
+    const grass = map.addTilesetImage(grassKey, grassKey, TILE, TILE, 0, 0, 100)!;
+    const sandKey = recolorGrass(this, 'sand', ...SAND_PALETTE);
+    const redKey = recolorGrass(this, 'reddirt', ...RED_PALETTE);
+    const grounds = [grass, map.addTilesetImage(sandKey, sandKey, TILE, TILE, 0, 0, 700)!, map.addTilesetImage(redKey, redKey, TILE, TILE, 0, 0, 900)!];
     const dirt = map.addTilesetImage('dirt', 'dirt', TILE, TILE, 0, 0, 300)!;
     const fences = map.addTilesetImage('fences', 'fences', TILE, TILE, 0, 0, 500)!;
     this.waterFirst = water.firstgid;
@@ -109,7 +116,7 @@ export class FarmScene extends WorldScene {
 
     this.waterLayer = map.createBlankLayer('water', water)!.setDepth(0);
     this.waterLayer.fill(water.firstgid);
-    const grassLayer = map.createBlankLayer('grass', grass)!.setDepth(1);
+    const grassLayer = map.createBlankLayer('grass', grounds)!.setDepth(1);
     this.grassLayer = grassLayer;
     this.soil = map.createBlankLayer('soil', dirt)!.setDepth(2);
     const fenceLayer = map.createBlankLayer('fence', fences)!.setDepth(3);
@@ -119,7 +126,7 @@ export class FarmScene extends WorldScene {
         if (w.land[y][x]) {
           const m = neighborMask(w.land, x, y);
           const idx = m === 15 && w.grassVariant[y][x] >= 0 ? w.grassVariant[y][x] : AUTOTILE[m];
-          grassLayer.putTileAt(grass.firstgid + idx, x, y);
+          grassLayer.putTileAt(grounds[w.ground[y][x] ?? GROUND.grass].firstgid + idx, x, y);
         }
         if (w.fence[y][x]) fenceLayer.putTileAt(fences.firstgid + FENCE_TILE[neighborMask(w.fence, x, y)], x, y);
       }
@@ -227,6 +234,7 @@ export class FarmScene extends WorldScene {
         this.softDecor.set(key(d.x, d.y), img);
       } else img = this.add.image(d.x * TILE, d.y * TILE, 'biome', single[d.kind]).setOrigin(0);
       img.setDepth('frame' in d ? 2.5 : (d.y + (tall.has(d.kind) ? 2 : 1)) * TILE);
+      if (d.tint) img.setData('tint', d.tint);
       this.decorImages.push(img);
       if (NODES[d.kind]) {
         const node = { d, img, dmg: 0 };
@@ -444,6 +452,7 @@ export class FarmScene extends WorldScene {
     const k = key(t.x, t.y);
     const r = useObject(this.state, k, this.selected);
     if (!r.ok) return this.hud.toast(r.reason);
+    if (r.action === 'open') return this.hud.openStorage(this.state, k);
     const name = ITEMS[r.item].name.toLowerCase();
     const msg = { collect: `Lấy được ${name}`, load: `Đã bỏ ${r.qty} nguyên liệu — đang làm ${name}`, pickup: `Đã nhặt ${name} lên`, mill: `Xay được ${r.qty} ${name}` }[r.action];
     this.hud.toast(msg);
@@ -579,7 +588,7 @@ export class FarmScene extends WorldScene {
     const tint: Record<Season, number> = { spring: 0xffffff, summer: 0xf6ffdc, fall: 0xffc488, winter: 0xcfdcf2 };
     const t = mulColor(tint[seasonOf(this.state.day)], MAP_TINT[this.state.map ?? 'plain']);
     this.grassLayer.forEachTile((tile) => (tile.tint = t));
-    for (const img of this.decorImages) if (img.active) img.setTint(t);
+    for (const img of this.decorImages) if (img.active) img.setTint(img.getData('tint') ? mulColor(t, img.getData('tint')) : t);
   }
 
   private refreshTrees() {

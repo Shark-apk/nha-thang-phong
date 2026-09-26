@@ -1,5 +1,15 @@
 node_modules
 dist
 # Sprout Lands (Cup Nooble) — giấy phép không cho phát tán lại bộ hình
-assets/
+assets/*
+# chỉ giữ các bảng tên → số khung của hình tự vẽ (để test chạy được khi không có bộ hình)
+!assets/Custom/
+assets/Custom/*
+!assets/Custom/*.json
 server/friends.db*
+.vercel
+.env*
+# tài liệu kỹ năng AI do tích hợp Neon cài (không thuộc game)
+.agents/
+.claude/
+skills-lock.json

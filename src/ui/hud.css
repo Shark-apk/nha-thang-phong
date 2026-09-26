@@ -215,3 +215,18 @@ kbd { font-family: var(--font); padding: 0 5px; border: 2px solid currentColor; 
 .rank--me { border-color: var(--accent); background: #fff6df; }
 .market__sell { align-items: center; flex-wrap: wrap; font-size: 22px; color: #7a5a3a; }
 .market__sell .field { width: 110px; }
+
+/* Giai đoạn 3: khung nhiệm vụ, bản đồ nhỏ, rương, bách khoa */
+.hud-quests { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); width: 270px; pointer-events: auto; }
+.hud-quests__head { font-family: var(--font); font-size: 20px; padding: 2px 10px; background: var(--paper); color: var(--ink); border: 2px solid var(--edge); border-radius: 8px; cursor: pointer; }
+.hud-quests ul { list-style: none; margin: 4px 0 0; padding: 6px 10px; background: rgba(244, 231, 200, 0.92); border: 2px solid var(--edge); border-radius: 8px; display: flex; flex-direction: column; gap: 3px; font-size: 19px; line-height: 1.05; }
+.hud-quests li { display: flex; justify-content: space-between; gap: 8px; }
+.hud-quests li em { font-style: normal; color: #7a5a3a; white-space: nowrap; }
+.hud-quests li.done span { color: #4f7a2e; }
+.hud-quests li.story { color: #3f5f9f; border-top: 1px dashed var(--edge); padding-top: 3px; }
+.hud-mini { position: absolute; right: 14px; top: 150px; display: none; border: 3px solid var(--edge); border-radius: 6px; image-rendering: pixelated; background: #9bd4c3; }
+.hud-mini.show { display: block; }
+.inv__info { min-height: 1.2em; font-size: 20px; color: #6b4a1c; }
+.storage .inv__grid { max-height: 34vh; overflow-y: auto; }
+.wiki .field { width: 100%; }
+.storage > b { font-size: 22px; font-weight: normal; color: #6b4a1c; }

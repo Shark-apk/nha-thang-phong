@@ -117,6 +117,11 @@ export interface FarmState {
   giants: Record<string, { id: CropId }>;
   hybrids: CropId[];
   /** Mốc 18: đồ rừng đã hái hôm nay, rác đã góp cho rạn san hô, tầng hang sâu nhất, rương đã mở. */
+  /** Giờ thật của lần lưu gần nhất trên máy này, và của bản trên mây mà máy này đã đồng bộ (giai đoạn 3). */
+  /** Rương gỗ đặt trên đất: khóa ô → 36 ô đồ (giai đoạn 3). */
+  storage: Record<string, (Slot | null)[]>;
+  savedAt?: number;
+  cloudAt?: number;
   forage: { day: number; taken: string[] } | null;
   reefTrash: number;
   mineDeepest: number;
@@ -130,7 +135,7 @@ export const key = (x: number, y: number) => `${x},${y}`;
 export const unkey = (k: string) => k.split(',').map(Number) as [number, number];
 
 /** Tăng mỗi khi đổi cấu trúc FarmState, kèm một bước nâng cấp trong save.ts. */
-export const SAVE_VERSION = 13;
+export const SAVE_VERSION = 14;
 
 // ---------------------------------------------------------------- lịch
 
@@ -169,7 +174,7 @@ export function newFarm(spawn: { x: number; y: number }): FarmState {
     version: SAVE_VERSION, location: 'farm', day: 1, minutes: DAY_START, money: 150, energy: MAX_ENERGY, water: MAX_WATER,
     weather: weatherFor(1), tomorrow: weatherFor(2),
     inventory, tilled: {}, crops: {}, trees: {}, shipping: [], buildings: {}, animals: [], beehives: {},
-    tools: { hoe: 0, can: 0, axe: 0, pickaxe: 0 }, upgrading: null, objects: {}, cleared: {}, mine: null, npcs: {}, flags: [], mailbox: [], orders: null, bundles: {}, greenhouseDay: null, festival: null, fishCaught: {}, tutorial: 0, farmName: 'Nhà Thằng Phong', map: 'plain', skills: emptySkills(), professions: [], stats: emptyStats(), story: 0, npcQuestsDone: [], giants: {}, hybrids: [], forage: null, reefTrash: 0, mineDeepest: 1, chests: [], player: spawn, lastIncome: 0,
+    tools: { hoe: 0, can: 0, axe: 0, pickaxe: 0 }, upgrading: null, objects: {}, cleared: {}, mine: null, npcs: {}, flags: [], mailbox: [], orders: null, bundles: {}, greenhouseDay: null, festival: null, fishCaught: {}, tutorial: 0, farmName: 'Nhà Thằng Phong', map: 'plain', skills: emptySkills(), professions: [], stats: emptyStats(), story: 0, npcQuestsDone: [], giants: {}, hybrids: [], forage: null, reefTrash: 0, mineDeepest: 1, chests: [], storage: {}, player: spawn, lastIncome: 0,
   };
 }
 

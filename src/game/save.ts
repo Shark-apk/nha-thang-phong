@@ -53,6 +53,8 @@ const MIGRATIONS: Record<number, (s: Raw) => Raw> = {
   11: (s) => ({ ...s, giants: {}, hybrids: [] }),
   // v12 → v13: rừng, biển, hang sâu
   12: (s) => ({ ...s, forage: null, reefTrash: 0, mineDeepest: 1, chests: [] }),
+  // v13 → v14: rương gỗ
+  13: (s) => ({ ...s, storage: {} }),
 };
 
 export function migrate(raw: Raw): FarmState | null {
@@ -75,8 +77,11 @@ export function loadGame(n = slot): FarmState | null {
   }
 }
 
+export const saveKey = keyOf;
+
 export function saveGame(s: FarmState) {
   try {
+    s.savedAt = Date.now();
     localStorage.setItem(keyOf(slot), JSON.stringify(s));
     return true;
   } catch {

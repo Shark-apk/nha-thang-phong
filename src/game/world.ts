@@ -16,13 +16,18 @@ export const FENCE_TILE = [12, 8, 13, 9, 0, 4, 1, 5, 15, 11, 14, 10, 3, 7, 2, 6]
 export const GRASS_VARIANTS = [55, 56, 57, 66, 67, 68];
 
 export type Decor =
-  | { kind: 'bigTree' | 'fruitTree' | 'smallTree' | 'rock' | 'bigRock' | 'bush' | 'berryBush' | 'stump' | 'sunflower'; x: number; y: number }
-  | { kind: 'flower' | 'mushroom' | 'sprout'; x: number; y: number; frame: number };
+  | { kind: 'bigTree' | 'fruitTree' | 'smallTree' | 'rock' | 'bigRock' | 'bush' | 'berryBush' | 'stump' | 'sunflower'; x: number; y: number; tint?: number }
+  | { kind: 'flower' | 'mushroom' | 'sprout'; x: number; y: number; frame: number; tint?: number };
+
+/** Nền đất từng ô: cỏ của bản đồ, bãi cát, đất đỏ. */
+export const GROUND = { grass: 0, sand: 1, red: 2 } as const;
 
 export interface World {
   land: boolean[][];
   /** Ô cỏ đầy dùng hoa văn nào (-1 = ô thường). */
   grassVariant: number[][];
+  /** Nền đất từng ô (GROUND). Đồng bằng toàn cỏ. */
+  ground: number[][];
   fence: boolean[][];
   decor: Decor[];
   /** Ô không đi qua được (nước, nhà, cây, đá, rào, thùng). */
@@ -68,7 +73,13 @@ const MAP_TRIES: Record<FarmMap, Tries> = {
   delta: [40, 30, 30, 4, 6, 10, 20, 4, 8, 80],
 };
 /** Nhân màu cỏ theo bản đồ (cùng với màu mùa). */
-export const MAP_TINT: Record<FarmMap, number> = { plain: 0xffffff, coast: 0xfff2d6, tea: 0xd8f0c4, highland: 0xffe2c8, delta: 0xe6fff0 };
+export const MAP_TINT: Record<FarmMap, number> = { plain: 0xffffff, coast: 0xffffff, tea: 0xffffff, highland: 0xffffff, delta: 0xffffff };
+/** Màu cỏ riêng mỗi bản đồ: [tối, sáng] để đổi màu tileset cỏ lúc chạy (null = cỏ gốc). */
+export const GRASS_PALETTE: Record<FarmMap, [number, number] | null> = {
+  plain: null, coast: [0x8a9a3a, 0xd8e08a], tea: [0x245a30, 0x6ab860], highland: [0x6e6a30, 0xc0b464], delta: [0x2e8a3e, 0x96e070],
+};
+export const SAND_PALETTE: [number, number] = [0xc8a060, 0xf8e4b0];
+export const RED_PALETTE: [number, number] = [0x8a3a22, 0xc86a3e];
 
 export function buildWorld(seed = 7, map: FarmMap = 'plain'): World {
   const r = rng(seed);
@@ -89,7 +100,11 @@ export function buildWorld(seed = 7, map: FarmMap = 'plain'): World {
       if (map === 'coast' && y >= 28 - Math.round(1.5 * Math.sin(x / 5))) land[y][x] = false;
       // Miệt vườn: kênh phía nam + đông, hai ao nhỏ trong ruộng
       if (map === 'delta' && ((y >= 30 && y <= 31 && x >= 3 && x <= 44) || (x >= 44 && x <= 45 && y >= 20 && y <= 31)
-        || ((x - 16.5) / 1.6) ** 2 + ((y - 12.5) / 1.4) ** 2 < 1 || ((x - 32.5) / 1.6) ** 2 + ((y - 24.5) / 1.4) ** 2 < 1)) land[y][x] = false;
+        || ((x - 16.5) / 1.6) ** 2 + ((y - 12.5) / 1.4) ** 2 < 1 || ((x - 32.5) / 1.6) ** 2 + ((y - 24.5) / 1.4) ** 2 < 1
+        // kênh dọc giữa ruộng và nhà kính, bờ đê chỗ lối sang làng
+        || (x >= 36 && x <= 37 && y >= 15 && y <= 31 && (y < 16 || y > 17)))) land[y][x] = false;
+      // Ven biển: biển rộng hơn ở góc đông nam
+      if (map === 'coast' && x >= 36 && y >= 24 - Math.round(1.2 * Math.sin(x / 3))) land[y][x] = false;
     }
   }
 
@@ -165,6 +180,8 @@ export function buildWorld(seed = 7, map: FarmMap = 'plain'): World {
   place('flower', 1, 1, T[9], false, [24, 25, 32, 33, 34]);
   place('mushroom', 1, 1, 12, false, [5, 6, 7, 8]);
   place('sprout', 1, 1, 40, false, [14, 15]);
+  const ground = grid<number>(GROUND.grass);
+  if (map !== 'plain') addFeatures(map, seed, land, ground, decor, blocked, free);
 
   // Cửa hang (mốc 6): bỏ cây cối đè lên sau khi rải, để bố cục cũ của bản lưu cũ không bị xê dịch
   const overlaps = (d: Decor, x0: number, y0: number, x1: number, y1: number) => {
@@ -199,7 +216,66 @@ export function buildWorld(seed = 7, map: FarmMap = 'plain'): World {
   for (let y = 0; y < MAP_H; y++)
     for (let x = 0; x < MAP_W; x++) if (r() < 0.12) grassVariant[y][x] = GRASS_VARIANTS[Math.floor(r() * GRASS_VARIANTS.length)];
 
-  return { land, grassVariant, fence, decor, blocked, house, bin, shop, well, cave, mailbox, east, greenhouse, cart, farm, spawn };
+  return { land, grassVariant, ground, fence, decor, blocked, house, bin, shop, well, cave, mailbox, east, greenhouse, cart, farm, spawn };
+}
+
+/**
+ * Nét riêng của 4 bản đồ ngoài Đồng bằng (dùng số ngẫu nhiên riêng nên Đồng bằng không đổi):
+ * Ven biển — bãi cát, hàng dừa · Đồi chè — ruộng chè bậc thang trên đất đỏ, rừng thông ·
+ * Cao nguyên — đất đỏ bazan, đá tảng, thông, vườn cà phê · Miệt vườn — kênh rạch, vườn trái cây, dừa nước.
+ */
+function addFeatures(map: FarmMap, seed: number, land: boolean[][], ground: number[][], decor: Decor[], blocked: boolean[][],
+  free: (x: number, y: number, w?: number, h?: number) => boolean) {
+  const r = rng(seed * 131 + map.charCodeAt(0) * 17 + map.length);
+  const put = (kind: 'bigTree' | 'fruitTree' | 'smallTree' | 'rock' | 'bigRock' | 'bush' | 'berryBush', x: number, y: number, tint?: number, pad = 0) => {
+    const [w, h] = decorSize(kind);
+    if (!free(x - pad, y - pad, w + pad * 2, h + pad * 2)) return false;
+    decor.push({ kind, x, y, tint });
+    for (let xx = x; xx < x + w; xx++) blocked[y + h - 1][xx] = true;
+    return true;
+  };
+  /** Rải tối đa `n` cây/đá trong vùng `zone` (thử lần lượt các ô của vùng theo thứ tự ngẫu nhiên). */
+  const scatter = (kind: Parameters<typeof put>[0], n: number, tint: number | undefined, zone: (x: number, y: number) => boolean, pad = 1) => {
+    const cells: [number, number][] = [];
+    for (let y = 1; y < MAP_H - 2; y++) for (let x = 1; x < MAP_W - 2; x++) if (land[y][x] && zone(x, y)) cells.push([x, y]);
+    for (let i = cells.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [cells[i], cells[j]] = [cells[j], cells[i]]; }
+    let placed = 0;
+    for (const [x, y] of cells) if (placed < n && put(kind, x, y, tint, pad)) placed++;
+  };
+  const inField = (x: number, y: number) => x >= 13 && x <= 35 && y >= 9 && y <= 27;
+  const paint = (kind: number, zone: (x: number, y: number) => boolean) => {
+    for (let y = 0; y < MAP_H; y++) for (let x = 0; x < MAP_W; x++) if (land[y][x] && zone(x, y)) ground[y][x] = kind;
+  };
+  const blob = (cx: number, cy: number, rx: number, ry: number) => (x: number, y: number) => ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2 < 1 + Math.sin(x * 1.7 + y) * 0.15;
+
+  if (map === 'coast') {
+    const beach = (x: number, y: number) => !inField(x, y) && (y >= 24 || (x >= 33 && y >= 18) || (x <= 12 && y >= 22));
+    paint(GROUND.sand, beach);
+    scatter('bigTree', 14, 0xd8f080, beach, 0); // hàng dừa
+    scatter('rock', 12, 0xfff0d0, beach, 0);
+    scatter('bush', 14, 0xc8d890, (x, y) => !beach(x, y));
+  } else if (map === 'tea') {
+    // Ruộng chè bậc thang: hàng chè xen lối đất đỏ, chừa khe đi qua
+    const hills = [(x: number, y: number) => x >= 36 && x <= 46 && y >= 19 && y <= 31, (x: number, y: number) => x >= 18 && x <= 34 && y >= 2 && y <= 7,
+      (x: number, y: number) => x >= 8 && x <= 12 && y >= 26 && y <= 31];
+    const hill = (x: number, y: number) => hills.some((h) => h(x, y));
+    paint(GROUND.red, hill);
+    for (let y = 2; y < MAP_H - 1; y += 2) for (let x = 1; x < MAP_W - 1; x++) if (hill(x, y) && x % 7 !== 3) put('bush', x, y, 0x2f7a34);
+    scatter('smallTree', 26, 0x3a6a48, (x, y) => !hill(x, y)); // thông
+    scatter('bigTree', 10, 0x4a8050, (x, y) => !hill(x, y));
+  } else if (map === 'highland') {
+    const red = [blob(40, 24, 7, 6), blob(20, 4, 9, 3.5), blob(6, 28, 5, 4), blob(42, 4, 4, 3), blob(12, 18, 3, 5)];
+    const onRed = (x: number, y: number) => !inField(x, y) && red.some((f) => f(x, y));
+    paint(GROUND.red, onRed);
+    for (let y = 20; y <= 30; y += 2) for (let x = 37; x <= 45; x++) if (x % 5 !== 1) put('berryBush', x, y, 0x9a5a3a); // vườn cà phê
+    scatter('bigRock', 16, undefined, () => true);
+    scatter('rock', 22, 0xe8c8b0, () => true, 0);
+    scatter('smallTree', 24, 0x2e5040, () => true); // thông
+  } else if (map === 'delta') {
+    scatter('fruitTree', 22, undefined, () => true);
+    scatter('bigTree', 12, 0xb8f070, (x, y) => [[0, 1], [1, 0], [0, -1], [-1, 0], [2, 0], [0, 2]].some(([dx, dy]) => !land[y + dy]?.[x + dx]), 0); // dừa nước ven kênh
+    scatter('bush', 16, 0x5ac050, () => true);
+  }
 }
 
 /** `outside`: coi ô ngoài lưới là có (vùng xa: mép bản đồ không hiện viền bờ). */

@@ -10,7 +10,7 @@ import * as net from '../net/friends';
 import { CART_FARE, DECOR, REGIONS, TAILOR, type Guest, type RegionId } from '../data';
 import { BUILT, hotItems, HOT_MULT, regionOpen } from '../game/town';
 import { levelOf, weekStart, type Profile } from '../game/profile';
-import { activeEvent } from '../game/events';
+import { activeEvent, contestId } from '../game/events';
 import { paintAvatar } from './avatar';
 import { bundleDone, bundleHave, canCook, knowsDish, orderDone, ordersToday } from '../game/activities';
 import ICONS from '../../assets/Custom/icons.json';
@@ -21,6 +21,16 @@ import type { Slot } from '../game/farm';
 import './hud.css';
 import { sfx } from '../audio/sound';
 import { settings } from './settings';
+import { openSavePanel } from './savePanel';
+import { touchText } from './touch';
+import { session } from '../game/session';
+import { storyStep } from '../game/quests';
+
+const readPref = (k: string, d: string) => { try { return localStorage.getItem(`nongtrai.ui.${k}`) ?? d; } catch { return d; } };
+const writePref = (k: string, v: string) => { try { localStorage.setItem(`nongtrai.ui.${k}`, v); } catch { /* bỏ qua */ } };
+import { itemInfo, wikiHtml, type WikiTab } from './wiki';
+import { ACTION_NAME, bindKey, keyLabel, keyOf, REMAPPABLE, resetKeys, type Action } from '../game/controls';
+import { CHEST_SIZE, chestOf, putInChest, sortInventory, stashDuplicates, takeFromChest } from '../game/resources';
 
 const SHEETS: Record<string, { url: string; cols: number; w: number; h: number }> = {
   items: { url: '/Objects/Basic_tools_and_meterials.png', cols: 3, w: 48, h: 32 },
@@ -86,6 +96,8 @@ export class Hud {
   private h!: Handlers;
   private clock = el('div', 'hud-clock');
   private energy = el('div', 'hud-energy', '<div class="hud-energy__fill"></div><span>Sức</span>');
+  private questsEl = el('div', 'hud-quests');
+  private mini = el('canvas', 'hud-mini') as HTMLCanvasElement;
   private hpEl = el('div', 'hud-energy hud-hp', '<div class="hud-energy__fill"></div><span>Máu</span>');
   private bar = el('div', 'hud-bar');
   private hint = el('div', 'hud-hint');
@@ -103,11 +115,15 @@ export class Hud {
   selected = 0;
 
   constructor(private root: HTMLElement) {
-    root.append(this.nightEl, this.weatherEl, this.flash, this.banner, this.tut, this.clock, this.energy, this.hpEl, this.bar, this.hint, this.toastBox, this.fade, this.modal);
+    root.append(this.nightEl, this.weatherEl, this.flash, this.banner, this.tut, this.clock, this.energy, this.hpEl, this.questsEl, this.mini, this.bar, this.hint, this.toastBox, this.fade, this.modal);
     for (let i = 0; i < HOTBAR; i++) {
       const b = el('button', 'slot');
       b.type = 'button';
       b.addEventListener('click', () => this.h?.select(i));
+      // Nhấn giữ (điện thoại): xem thông tin món
+      let hold = 0;
+      b.addEventListener('pointerdown', () => { hold = window.setTimeout(() => { const sl = this.state?.inventory[i]; if (sl && this.state) this.toast(this.slotTitle(this.state, sl)); }, 450); });
+      for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) b.addEventListener(ev, () => clearTimeout(hold));
       this.bar.append(b);
     }
     // Esc đóng bảng đang mở
@@ -125,6 +141,7 @@ export class Hud {
 
   render(s: FarmState, selected: number) {
     this.state = s;
+    this.renderQuests(s);
     const left = DAY_END - s.minutes;
     const season = seasonOf(s.day);
     this.clock.innerHTML = `<b class="season-${season}">${SEASON_NAME[season]} · ${dayOfSeason(s.day)}</b><small>${WEEKDAY[weekday(s.day)]} · Năm ${yearOf(s.day)} · ${WEATHER_NAME[s.weather]}</small><span class="${left <= 120 ? 'late' : ''}">${clockLabel(s.minutes)}</span><em>${s.money.toLocaleString('vi-VN')} xu</em>`;
@@ -152,6 +169,7 @@ export class Hud {
     const it = ITEMS[slot.item];
     const tier = (TOOLS as string[]).includes(slot.item) ? toolTier(s, slot.item as ToolId) : 0;
     const extra = slot.item === 'can' ? ` — nước ${s.water}/${maxWater(s)}` : it.energy ? ` — ăn hồi ${it.energy} sức (F)` : it.kind === 'machine' && MACHINES[slot.item as keyof typeof MACHINES] ? ` — ${MACHINES[slot.item as keyof typeof MACHINES].info}` : it.sell ? ` — bán ${it.sell} xu` : '';
+    if (it.kind === 'seed' || it.kind === 'crop') return itemInfo(slot.item) + (slot.q ? ` (${QUALITY_NAME[slot.q]})` : '');
     return `${it.name}${tier ? ` ${TIER_NAME[tier]}` : ''}${slot.q ? ` (${QUALITY_NAME[slot.q]})` : ''}${extra}`;
   }
 
@@ -174,8 +192,67 @@ export class Hud {
     const up = s.upgrading ? ` · Thợ rèn đang làm ${ITEMS[s.upgrading.tool].name.toLowerCase()} (xong ngày ${s.upgrading.readyDay})` : '';
     const close = el('button', 'btn btn--primary', 'Đóng');
     close.addEventListener('click', () => this.close());
-    box.append(grid, el('p', 'inv__tools', tools + up), close);
+    const sort = el('button', 'btn', 'Sắp xếp túi');
+    sort.addEventListener('click', () => { sortInventory(s); this.render(s, this.selected); this.openInventory(s, null); });
+    const pickedSlot = picked !== null ? s.inventory[picked] : null;
+    const info = el('p', 'inv__info', pickedSlot ? this.slotTitle(s, pickedSlot) : 'Bấm một món để xem thông tin.');
+    const row = el('div', 'row');
+    row.append(close, sort);
+    box.append(grid, info, el('p', 'inv__tools', tools + up), row);
     this.open(box);
+  }
+
+  /** Rương gỗ: bấm món trong túi để cất, bấm món trong rương để lấy ra. */
+  openStorage(s: FarmState, k: string, note = '') {
+    const chest = chestOf(s, k);
+    const used = chest.filter(Boolean).length;
+    const box = el('div', 'panel inv storage', `<h2>Rương gỗ · ${used}/${CHEST_SIZE}</h2><p>${note || 'Bấm món trong túi để cất vào rương, bấm món trong rương để lấy ra (cả chồng).'}</p>`);
+    const grid = (slots: (Slot | null)[], onPick: (i: number) => boolean, label: string) => {
+      const g = el('div', 'inv__grid');
+      slots.forEach((slot, i) => {
+        const b = el('button', 'slot', slot ? this.slotHtml(s, slot) : '');
+        b.title = slot ? this.slotTitle(s, slot) : 'Trống';
+        b.setAttribute('aria-label', slot ? `${label}: ${ITEMS[slot.item].name} ×${slot.qty}` : `${label}: ô trống`);
+        if (slot) b.addEventListener('click', () => {
+          const ok = onPick(i);
+          this.render(s, this.selected);
+          this.openStorage(s, k, ok ? '' : label === 'Rương' ? 'Túi đồ đầy' : 'Rương đầy');
+        });
+        g.append(b);
+      });
+      return g;
+    };
+    const stash = el('button', 'btn', 'Cất hết đồ trùng');
+    stash.addEventListener('click', () => { const n = stashDuplicates(s, k); this.render(s, this.selected); this.openStorage(s, k, n ? `Đã cất ${n} chồng đồ` : 'Không có món nào trùng với rương'); });
+    const sort = el('button', 'btn', 'Sắp xếp túi');
+    sort.addEventListener('click', () => { sortInventory(s); this.render(s, this.selected); this.openStorage(s, k); });
+    const close = el('button', 'btn btn--primary', 'Xong');
+    close.addEventListener('click', () => this.close());
+    const row = el('div', 'row');
+    row.append(close, stash, sort);
+    box.append(el('b', '', 'Rương'), grid(chest, (i) => takeFromChest(s, k, i), 'Rương'), el('b', '', 'Túi'), grid(s.inventory, (i) => ITEMS[s.inventory[i]!.item].kind !== 'tool' && putInChest(s, k, i), 'Túi'), row);
+    this.open(box);
+  }
+
+  /** Bách khoa (phím J): cây trồng, món ăn, dân làng, hang sâu. */
+  openWiki(s: FarmState, tab: WikiTab = 'crops', filter = '') {
+    const box = el('div', 'panel shop wiki', '<h2>Bách khoa</h2>');
+    const tabs = el('div', 'tabs');
+    for (const [t, label] of [['crops', 'Cây trồng'], ['dishes', 'Món ăn'], ['npcs', 'Dân làng'], ['mine', 'Hang sâu']] as const) {
+      const b = el('button', `tab${t === tab ? ' tab--on' : ''}`, label);
+      b.addEventListener('click', () => this.openWiki(s, t));
+      tabs.append(b);
+    }
+    const search = el('input', 'field') as HTMLInputElement;
+    search.placeholder = 'Tìm theo tên…';
+    search.value = filter;
+    const list = el('div', 'shop__list', wikiHtml(s, tab, filter));
+    search.addEventListener('input', () => { list.innerHTML = wikiHtml(s, tab, search.value); });
+    const close = el('button', 'btn btn--primary', 'Đóng');
+    close.addEventListener('click', () => this.close());
+    box.append(tabs, ...(tab === 'mine' ? [] : [search]), list, close);
+    this.open(box);
+    if (filter) search.focus();
   }
 
   /** Bảng chế tạo (phím K). */
@@ -200,7 +277,7 @@ export class Hud {
   }
 
   toast(msg: string) {
-    this.toastBox.textContent = msg;
+    this.toastBox.textContent = touchText(msg);
     this.toastBox.classList.add('show');
     clearTimeout(this.toastTimer);
     this.toastTimer = window.setTimeout(() => this.toastBox.classList.remove('show'), 2600);
@@ -215,7 +292,45 @@ export class Hud {
   private open(content: HTMLElement) {
     this.modal.replaceChildren(content);
     this.modal.classList.add('show');
+    document.body.classList.add('hud-open');
     this.h.setPaused(true);
+  }
+
+  /** Khung nhiệm vụ bên trái: nhiệm vụ ngày + bước cốt truyện; bấm tiêu đề để thu gọn. */
+  private questKey = '';
+  private renderQuests(s: FarmState) {
+    const p = session.profile;
+    const open = readPref('tracker', '1') === '1';
+    const step = storyStep(s);
+    const daily = p.quests?.daily ?? [];
+    const k = JSON.stringify([open, s.story, daily.map((q) => [q.progress, q.claimed])]);
+    if (k === this.questKey) return;
+    this.questKey = k;
+    const rows = daily.map((q) => {
+      const done = q.progress >= q.target;
+      return `<li class="${done ? 'done' : ''}"><span>${q.text}</span><em>${q.claimed ? '✓' : `${Math.min(q.progress, q.target)}/${q.target}`}</em></li>`;
+    }).join('');
+    this.questsEl.innerHTML = `<button type="button" class="hud-quests__head">${open ? '▾' : '▸'} Việc hôm nay</button>${open ? `<ul>${rows}${step ? `<li class="story"><span>${step.title}: ${step.text}</span></li>` : ''}</ul>` : ''}`;
+    this.questsEl.querySelector('button')!.onclick = () => { writePref('tracker', open ? '0' : '1'); this.questKey = ''; this.renderQuests(s); };
+  }
+
+  /** Bản đồ nhỏ (phím N): ô đi được / bị chặn, mình (đỏ), dân làng (vàng). */
+  minimap(grid: boolean[][] | null, me: { x: number; y: number }, marks: { x: number; y: number }[] = []) {
+    const on = readPref('minimap', '1') === '1' && !document.body.classList.contains('touch');
+    this.mini.classList.toggle('show', on && !!grid);
+    if (!on || !grid) return;
+    const H = grid.length, W = grid[0].length;
+    const cell = Math.max(1, Math.floor(Math.min(180 / W, 120 / H)));
+    if (this.mini.width !== W * cell || this.mini.height !== H * cell) { this.mini.width = W * cell; this.mini.height = H * cell; }
+    const g = this.mini.getContext('2d')!;
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { g.fillStyle = grid[y][x] ? '#4f6e45' : '#b8d888'; g.fillRect(x * cell, y * cell, cell, cell); }
+    g.fillStyle = '#f0c040';
+    for (const m of marks) g.fillRect(m.x * cell - 1, m.y * cell - 1, cell + 2, cell + 2);
+    g.fillStyle = '#d0302a';
+    g.fillRect(me.x * cell - 2, me.y * cell - 2, cell + 4, cell + 4);
+  }
+  toggleMinimap() {
+    writePref('minimap', readPref('minimap', '1') === '1' ? '0' : '1');
   }
 
   /** Thanh máu trong hang sâu; `null` là ẩn. */
@@ -234,8 +349,11 @@ export class Hud {
   }
 
   close() {
+    this.keyGrab?.();
+    this.keyGrab = null;
     this.modal.classList.remove('show');
     this.modal.replaceChildren();
+    document.body.classList.remove('hud-open');
     this.h.setPaused(false);
   }
 
@@ -719,6 +837,7 @@ export class Hud {
   /** Bạn bè (phím B): đăng ký mã, kết bạn, ghé thăm. */
   async openFriends(s: FarmState, tab: 'friends' | 'rank' | 'contest' | 'market' = 'friends') {
     const id = net.loadIdentity();
+    document.querySelector('.tm__btn.dot')?.classList.remove('dot');
     const box = el('div', 'panel shop friends', '<h2>Bạn bè</h2>');
     const close = el('button', 'btn btn--primary', 'Đóng');
     close.addEventListener('click', () => this.close());
@@ -797,10 +916,29 @@ export class Hud {
           const b = el('button', 'btn', 'Ghé thăm') as HTMLButtonElement;
           b.disabled = !f.updated;
           b.addEventListener('click', () => { this.close(); this.h.visit(f.code); });
-          r.append(heart, b);
+          const more = el('button', 'btn', '⋯');
+          more.title = 'Hủy kết bạn / chặn';
+          more.addEventListener('click', () => this.choose(f.name, 'Hủy kết bạn thì hai bên không thấy nông trại, chợ của nhau nữa. Chặn thì người đó cũng không kết bạn lại được.', [
+            { label: 'Hủy kết bạn', fn: () => net.removeFriend(f.code).then(() => { this.openFriends(s); this.toast(`Đã hủy kết bạn với ${f.name}`); }, (e) => this.toast((e as Error).message)) },
+            { label: 'Chặn', fn: () => net.blockFriend(f.code).then(() => { this.openFriends(s); this.toast(`Đã chặn ${f.name}`); }, (e) => this.toast((e as Error).message)) },
+            { label: 'Thôi', primary: true, fn: () => this.openFriends(s) },
+          ]));
+          r.append(heart, b, more);
           list.append(r);
         }
       });
+      // Người đã chặn
+      net.listBlocks().then((blocked) => {
+        if (!blocked.length) return;
+        list.append(el('p', 'fishbook__head', 'Đã chặn'));
+        for (const x of blocked) {
+          const r = el('div', 'shop__row', `<div><b>${x.name}</b><span>mã ${x.code}</span></div>`);
+          const u = el('button', 'btn', 'Bỏ chặn');
+          u.addEventListener('click', () => net.unblockFriend(x.code).then(() => this.openFriends(s), (e) => this.toast((e as Error).message)));
+          r.append(u);
+          list.append(r);
+        }
+      }).catch(() => {});
       return;
     }
 
@@ -832,7 +970,7 @@ export class Hud {
 
     if (tab === 'contest') {
       const ev = activeEvent();
-      const cid = ev ? ev.id : `tuan-${weekStart()}`;
+      const cid = contestId();
       const name = ev ? `Hội thi ${ev.name}` : 'Hội thi tuần này';
       const h = held();
       const enter = el('button', 'btn btn--primary', h ? `Nộp ${itemLabel(h.item, h.q)} · ${net.contestScore(h.item, h.q ?? 0)} điểm` : 'Cầm nông sản / cá muốn dự thi') as HTMLButtonElement;
@@ -926,7 +1064,7 @@ export class Hud {
     this.tutKey = k;
     this.tut.classList.toggle('show', !!html);
     if (!html) return this.tut.replaceChildren();
-    this.tut.innerHTML = `<b>${last ? 'Hoàn thành' : 'Hướng dẫn'}</b><p>${html}</p>`;
+    this.tut.innerHTML = `<b>${last ? 'Hoàn thành' : 'Hướng dẫn'}</b><p>${touchText(html)}</p>`;
     const b = el('button', 'btn', last ? 'Đóng' : 'Bỏ qua hướng dẫn');
     b.addEventListener('click', onSkip);
     this.tut.append(b);
@@ -934,10 +1072,13 @@ export class Hud {
 
   /** Bảng phím tắt (phím H). */
   openHelp() {
+    const k = (a: Action) => keyLabel(keyOf(a));
     const rows: [string, string][] = [
-      ['WASD / mũi tên', 'đi lại'], ['Space / E / chuột trái', 'dùng món đang cầm lên ô có khung vàng'], ['Shift + dùng', 'cuốc/tưới cả vùng (dụng cụ đã nâng cấp)'],
-      ['1–9 / lăn chuột', 'chọn món trên thanh công cụ'], ['F', 'ăn món đang cầm'], ['I', 'túi đồ (bấm 2 ô để đổi chỗ)'], ['K', 'chế tạo'],
-      ['R', 'dân làng & tình cảm'], ['B', 'bạn bè'], ['M', 'bản đồ thế giới, đi xe bò'], ['Tab', 'sảnh: nhiệm vụ, nhân vật, hòm thư'], ['C', 'lịch mùa, sinh nhật, lễ hội'], ['H', 'bảng này'], ['Esc', 'cài đặt, âm lượng, cỡ chữ'],
+      ['WASD / mũi tên', 'đi lại'], [`${k('use')} / chuột trái`, 'dùng món đang cầm lên ô có khung vàng'], ['Shift + dùng', 'cuốc/tưới cả vùng (dụng cụ đã nâng cấp)'],
+      ['1–9 / lăn chuột', 'chọn món trên thanh công cụ'], [k('eat'), 'ăn món đang cầm'], [k('inventory'), 'túi đồ (bấm 2 ô để đổi chỗ)'], [k('craft'), 'chế tạo'],
+      [k('relations'), 'dân làng & tình cảm'], [k('wiki'), 'bách khoa: cây trồng, món ăn, quà dân làng, hang sâu'], [k('minimap'), 'bật/tắt bản đồ nhỏ'], [k('friends'), 'bạn bè'], [k('map'), 'bản đồ thế giới, đi xe bò'],
+      ['Tab', 'sảnh: nhiệm vụ, nhân vật, hòm thư'], [k('calendar'), 'lịch mùa, sinh nhật, lễ hội'], [k('help'), 'bảng này'], ['Esc', 'cài đặt, đổi phím, âm lượng'],
+      ['Tay cầm', 'cần trái đi · A dùng · B ăn / đóng bảng · X chế tạo · Y túi · LB/RB đổi món · Back bản đồ · Start cài đặt'],
     ];
     const box = el('div', 'panel', `<h2>Phím tắt</h2><table class="help">${rows.map(([k, v]) => `<tr><td><kbd>${k}</kbd></td><td>${v}</td></tr>`).join('')}</table>
       <p>Ruộng rào: trồng trọt · Rương cạnh nhà: bán hàng (tiền về sáng mai) · Mép đông: sang làng · Góc đông bắc: hang đá · Ngủ để qua ngày và lưu game.</p>`);
@@ -946,6 +1087,39 @@ export class Hud {
     box.append(close);
     this.open(box);
   }
+
+  /** Đổi phím: bấm vào phím của một việc rồi bấm phím mới; trùng thì hai việc đổi phím cho nhau. */
+  openKeys(back: Parameters<Hud['openSettings']>[0], waiting: Action | null = null, note = '') {
+    const box = el('div', 'panel shop keys', `<h2>Đổi phím</h2><p>${note || 'Bấm vào phím muốn đổi rồi bấm phím mới. Tab, Esc, số 1–9 và WASD / mũi tên giữ cố định.'}</p>`);
+    const list = el('div', 'shop__list');
+    for (const a of REMAPPABLE) {
+      const row = el('div', 'shop__row', `<div><b>${ACTION_NAME[a]}</b></div>`);
+      const b = el('button', `btn${waiting === a ? ' btn--primary' : ''}`, waiting === a ? 'Bấm phím mới…' : keyLabel(keyOf(a)));
+      b.addEventListener('click', () => this.openKeys(back, a));
+      row.append(b);
+      list.append(row);
+    }
+    const reset = el('button', 'btn', 'Về phím mặc định');
+    reset.addEventListener('click', () => { resetKeys(); this.openKeys(back, null, 'Đã đặt lại phím mặc định'); });
+    const done = el('button', 'btn btn--primary', 'Xong');
+    done.addEventListener('click', () => { this.close(); this.openSettings(back); });
+    const row = el('div', 'row');
+    row.append(done, reset);
+    box.append(list, row);
+    this.open(box);
+    if (!waiting) return;
+    const grab = (e: KeyboardEvent) => {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      window.removeEventListener('keydown', grab, true);
+      if (e.code === 'Escape') return this.openKeys(back);
+      const ok = bindKey(waiting, e.code);
+      this.openKeys(back, null, ok ? `${ACTION_NAME[waiting]}: ${keyLabel(e.code)}` : 'Phím này giữ cố định, chọn phím khác');
+    };
+    window.addEventListener('keydown', grab, true);
+    this.keyGrab = () => window.removeEventListener('keydown', grab, true);
+  }
+  private keyGrab: (() => void) | null = null;
 
   /** Cài đặt (phím Esc). */
   openSettings(opts: { onChange: () => void; onTutorial: () => void; onQuit: () => void }) {
@@ -972,15 +1146,33 @@ export class Hud {
       sizes.append(b);
     }
     box.append(sizes);
+    const day = el('div', 'set__row', '<span>Một ngày dài</span>');
+    for (const m of [11, 15, 20]) {
+      const b = el('button', `tab${(settings.dayMinutes || 11) === m ? ' tab--on' : ''}`, `${m} phút`);
+      b.addEventListener('click', () => { settings.dayMinutes = m; opts.onChange(); this.close(); this.openSettings(opts); });
+      day.append(b);
+    }
+    const motion = el('label', 'set__row', '<span>Giảm chuyển động (tắt rung, chớp sáng)</span>');
+    const mc = el('input') as HTMLInputElement;
+    mc.type = 'checkbox';
+    mc.checked = settings.reduceMotion;
+    mc.addEventListener('change', () => { settings.reduceMotion = mc.checked; opts.onChange(); });
+    motion.append(mc);
+    box.append(day, motion);
     const row = el('div', 'row');
+    const keys = el('button', 'btn', 'Đổi phím');
+    keys.addEventListener('click', () => this.openKeys(opts));
+    row.append(keys);
     const tut = el('button', 'btn', 'Xem lại hướng dẫn');
     tut.addEventListener('click', () => { this.close(); opts.onTutorial(); });
     const quit = el('button', 'btn', 'Về màn hình chính');
-    quit.addEventListener('click', () => { if (confirm('Về màn hình chính? Game chỉ lưu lúc đi ngủ — việc làm hôm nay sẽ mất.')) opts.onQuit(); });
+    quit.addEventListener('click', () => { if (confirm('Về màn hình chính? Game sẽ lưu lại trước khi thoát.')) opts.onQuit(); });
+    const saves = el('button', 'btn', 'Bản lưu & khôi phục');
+    saves.addEventListener('click', () => { this.close(); openSavePanel(); });
     const close = el('button', 'btn btn--primary', 'Xong');
     close.addEventListener('click', () => this.close());
-    row.append(close, tut, quit);
-    box.append(el('p', 'set__note', 'Game tự lưu mỗi khi đi ngủ.'), row);
+    row.append(close, tut, saves, quit);
+    box.append(el('p', 'set__note', 'Game tự lưu mỗi 2 phút, khi chuyển cảnh, khi đóng tab và khi đi ngủ.'), row);
     this.open(box);
   }
 
@@ -1014,6 +1206,7 @@ export class Hud {
   }
 
   lightning() {
+    if (settings.reduceMotion) return;
     this.flash.classList.remove('go');
     void this.flash.offsetWidth;
     this.flash.classList.add('go');

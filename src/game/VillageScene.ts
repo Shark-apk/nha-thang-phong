@@ -42,6 +42,9 @@ export class VillageScene extends WorldScene {
   private points: Record<string, Tile> = {};
   private buildings: Building[] = [];
   private walkers: Walker[] = [];
+  protected minimapMarks() {
+    return this.walkers.filter((w) => w.sprite.visible).map((w) => ({ x: Math.floor(w.sprite.x / TILE), y: Math.floor(w.sprite.y / TILE) }));
+  }
   private tinted: (Phaser.GameObjects.Image | Phaser.Tilemaps.TilemapLayer)[] = [];
   private paradeStep = 0;
   private lantern?: Phaser.GameObjects.Image;

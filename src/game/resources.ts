@@ -7,7 +7,7 @@ import {
   BACKPACK, CAN_CAPACITY, CROPS, ITEMS, machineOutput, MACHINES, NODES, RECIPES, SCARECROW_RADIUS, sprinklerArea, TOOL_UPGRADES, UPGRADE_DAYS,
   type ItemId, type MachineId, type ToolId,
 } from '../data';
-import { addItem, countItem, key, removeFromSlot, seeded, unkey, type FarmState, type UseResult } from './farm';
+import { addItem, countItem, key, removeFromSlot, seeded, unkey, type FarmState, type Slot, type UseResult } from './farm';
 
 export interface PlacedObject {
   /** Máy (MachineId) hoặc đồ trang trí (deco_*). */
@@ -194,7 +194,7 @@ export function placeObject(s: FarmState, slot: number, x: number, y: number, fr
 }
 
 export type ObjectResult =
-  | { ok: true; action: 'collect' | 'load' | 'pickup' | 'mill'; item: ItemId; qty: number }
+  | { ok: true; action: 'collect' | 'load' | 'pickup' | 'mill' | 'open'; item: ItemId; qty: number }
   | { ok: false; reason: string };
 
 /** Bấm vào máy khi đang cầm món ở `slot`: lấy thành phẩm / bỏ nguyên liệu / nhặt máy lên (rìu, cuốc chim). */
@@ -207,6 +207,18 @@ export function useObject(s: FarmState, k: string, slot: number): ObjectResult {
     if (!addItem(s, o.kind, 1)) return { ok: false, reason: 'Túi đồ đầy' };
     delete s.objects[k];
     return { ok: true, action: 'pickup', item: o.kind, qty: 1 };
+  }
+  if (o.kind === 'storage') {
+    const held = s.inventory[slot]?.item;
+    const box = chestOf(s, k);
+    if (held === 'axe' || held === 'pickaxe') {
+      if (box.some(Boolean)) return { ok: false, reason: 'Rương còn đồ — lấy hết ra rồi mới nhặt lên được' };
+      if (!addItem(s, 'storage', 1)) return { ok: false, reason: 'Túi đồ đầy' };
+      delete s.objects[k];
+      delete s.storage[k];
+      return { ok: true, action: 'pickup', item: 'storage', qty: 1 };
+    }
+    return { ok: true, action: 'open', item: 'storage', qty: 0 };
   }
   const m = MACHINES[o.kind as MachineId];
   if (o.out) {
@@ -293,4 +305,68 @@ export function nightResources(s: FarmState): ResourceNight {
   }
   r.tool = collectUpgrade(s);
   return r;
+}
+
+// ---------------------------------------------------------------- rương gỗ & sắp xếp túi (giai đoạn 3)
+
+export const CHEST_SIZE = 36;
+const sameStack = (a: Slot, b: Slot) => a.item === b.item && (a.q ?? 0) === (b.q ?? 0);
+
+export function chestOf(s: FarmState, k: string): (Slot | null)[] {
+  s.storage ??= {};
+  const box = (s.storage[k] ??= Array(CHEST_SIZE).fill(null));
+  while (box.length < CHEST_SIZE) box.push(null);
+  return box;
+}
+
+/** Cất cả chồng ở ô túi `slot` vào rương (dồn vào chồng cùng loại nếu có). */
+export function putInChest(s: FarmState, k: string, slot: number): boolean {
+  const sl = s.inventory[slot];
+  if (!sl) return false;
+  const box = chestOf(s, k);
+  const same = box.find((b) => b && sameStack(b, sl));
+  if (same) same.qty += sl.qty;
+  else {
+    const i = box.indexOf(null);
+    if (i === -1) return false;
+    box[i] = { ...sl };
+  }
+  s.inventory[slot] = null;
+  return true;
+}
+
+/** Lấy cả chồng ở ô rương `idx` về túi. */
+export function takeFromChest(s: FarmState, k: string, idx: number): boolean {
+  const box = chestOf(s, k);
+  const b = box[idx];
+  if (!b || !addItem(s, b.item, b.qty, b.q ?? 0)) return false;
+  box[idx] = null;
+  return true;
+}
+
+/** Cất hết những món trong túi mà rương đã có (không động tới dụng cụ). Trả về số chồng đã cất. */
+export function stashDuplicates(s: FarmState, k: string): number {
+  const box = chestOf(s, k);
+  let n = 0;
+  s.inventory.forEach((sl, i) => {
+    if (sl && ITEMS[sl.item].kind !== 'tool' && box.some((b) => b && sameStack(b, sl)) && putInChest(s, k, i)) n++;
+  });
+  return n;
+}
+
+const KIND_ORDER = ['tool', 'seed', 'sapling', 'crop', 'fish', 'product', 'dish', 'material', 'machine'];
+
+/** Sắp xếp túi: dụng cụ giữ nguyên chỗ; còn lại gom chồng trùng rồi xếp theo loại, tên, chất lượng. */
+export function sortInventory(s: FarmState) {
+  const loose: Slot[] = [];
+  s.inventory.forEach((sl, i) => {
+    if (!sl || ITEMS[sl.item].kind === 'tool') return;
+    const same = loose.find((x) => sameStack(x, sl));
+    if (same) same.qty += sl.qty;
+    else loose.push({ ...sl });
+    s.inventory[i] = null;
+  });
+  const rank = (x: Slot) => { const r = KIND_ORDER.indexOf(ITEMS[x.item].kind); return r < 0 ? KIND_ORDER.length : r; };
+  loose.sort((a, b) => rank(a) - rank(b) || ITEMS[a.item].name.localeCompare(ITEMS[b.item].name, 'vi') || (b.q ?? 0) - (a.q ?? 0));
+  for (const x of loose) s.inventory[s.inventory.indexOf(null)] = x;
 }

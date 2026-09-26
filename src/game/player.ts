@@ -3,6 +3,8 @@ import { TILE } from './world';
 import { PLAYER_TEX } from './playerSheet';
 import { worn } from './skills';
 import { sfx, type Sfx } from '../audio/sound';
+import { touchInput } from '../ui/touch';
+import { padInput } from './controls';
 
 export type Dir = 'down' | 'up' | 'left' | 'right';
 export interface Tile { x: number; y: number }
@@ -45,9 +47,16 @@ export class PlayerController {
   private keys: Record<string, Phaser.Input.Keyboard.Key>;
   private walls: Phaser.Physics.Arcade.StaticGroup;
   private dynamic = new Map<string, Phaser.GameObjects.Zone>();
+  /** Lưới ô bị chặn (cập nhật theo setBlocked) — để tìm đường khi chạm vào ô xa. */
+  private grid: boolean[][];
+  /** Đường đang tự đi (chạm để đi) + việc làm khi tới nơi. */
+  private path: Tile[] = [];
+  private arrive: (() => void) | null = null;
+  private stuck = { d: Infinity, t: 0 };
 
   constructor(private scene: Phaser.Scene, x: number, y: number, blocked: boolean[][], onClick: (t: Tile) => void) {
     ensureAnims(scene);
+    this.grid = blocked.map((row) => [...row]);
     const h = blocked.length;
     const w = blocked[0].length;
     this.sprite = scene.physics.add.sprite(x, y, tex(scene, 'char'), 0);
@@ -74,17 +83,28 @@ export class PlayerController {
       this.mouseTile = this.inReach(t) ? t : null;
     });
     scene.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
-      if (!p.leftButtonDown()) return;
+      if (!p.leftButtonDown() && !p.wasTouch) return;
       const t = { x: Math.floor(p.worldX / TILE), y: Math.floor(p.worldY / TILE) };
       if (this.inReach(t)) {
+        this.stop();
         this.face(t);
         onClick(t);
+      } else if (p.wasTouch && !this.busy) {
+        // Chạm ô xa: tự đi tới; ô đó là vật (cửa, quầy, cây…) thì tới cạnh rồi dùng luôn
+        const blockedTarget = !!this.grid[t.y]?.[t.x];
+        this.walkTo(t, blockedTarget ? () => { if (this.inReach(t)) { this.face(t); onClick(t); } } : null);
       }
     });
   }
 
+  /** Lưới ô bị chặn hiện tại (bản đồ nhỏ đọc). */
+  walkGrid() {
+    return this.grid;
+  }
+
   /** Chặn/bỏ chặn một ô lúc đang chơi (cây mới trồng, máy móc, cây bị chặt…). */
   setBlocked(x: number, y: number, on: boolean) {
+    if (this.grid[y] && x >= 0 && x < this.grid[y].length) this.grid[y][x] = on;
     const k = `${x},${y}`;
     const z = this.dynamic.get(k);
     if (on && !z) {
@@ -146,17 +166,90 @@ export class PlayerController {
     });
   }
 
+  /** Tìm đường theo ô (BFS 4 hướng) tới `t`, hoặc tới ô cạnh nó nếu `t` bị chặn. */
+  walkTo(t: Tile, then: (() => void) | null) {
+    const H = this.grid.length, W = this.grid[0].length;
+    const free = (x: number, y: number) => x >= 0 && y >= 0 && x < W && y < H && !this.grid[y][x];
+    const goals = new Set<string>();
+    if (free(t.x, t.y)) goals.add(`${t.x},${t.y}`);
+    else for (const [dx, dy] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) if (free(t.x + dx, t.y + dy)) goals.add(`${t.x + dx},${t.y + dy}`);
+    if (!goals.size) return false;
+    const start = this.feetTile();
+    const prev = new Map<string, string | null>([[`${start.x},${start.y}`, null]]);
+    const queue: Tile[] = [start];
+    let end: string | null = goals.has(`${start.x},${start.y}`) ? `${start.x},${start.y}` : null;
+    while (queue.length && !end && prev.size < 4000) {
+      const c = queue.shift()!;
+      for (const [dx, dy] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) {
+        const x = c.x + dx, y = c.y + dy, k = `${x},${y}`;
+        if (prev.has(k) || !free(x, y)) continue;
+        prev.set(k, `${c.x},${c.y}`);
+        if (goals.has(k)) { end = k; break; }
+        queue.push({ x, y });
+      }
+    }
+    if (!end) return false;
+    const path: Tile[] = [];
+    for (let k: string | null = end; k && prev.get(k) !== null; k = prev.get(k) ?? null) {
+      const [x, y] = k.split(',').map(Number);
+      path.unshift({ x, y });
+    }
+    this.path = path;
+    this.arrive = then;
+    this.stuck = { d: Infinity, t: 0 };
+    if (!path.length) this.finishWalk();
+    return true;
+  }
+
+  stop() {
+    this.path = [];
+    this.arrive = null;
+  }
+
+  private finishWalk() {
+    const then = this.arrive;
+    this.stop();
+    this.sprite.setVelocity(0);
+    then?.();
+  }
+
+  /** Hướng đi khi đang tự đi theo đường (0,0 = tới nơi / không có đường). */
+  private pathVector(): [number, number] {
+    const next = this.path[0];
+    if (!next) return [0, 0];
+    const body = this.sprite.body!;
+    const fx = this.sprite.x, fy = body.y + 4;
+    const tx = next.x * TILE + TILE / 2, ty = next.y * TILE + TILE / 2;
+    const dx = tx - fx, dy = ty - fy;
+    const d = Math.hypot(dx, dy);
+    if (d < 2.5) {
+      this.path.shift();
+      this.stuck = { d: Infinity, t: this.scene.time.now };
+      if (!this.path.length) { this.finishWalk(); return [0, 0]; }
+      return this.pathVector();
+    }
+    // Kẹt (vật mới mọc chắn đường, con vật đứng giữa lối) → bỏ đi tiếp
+    const now = this.scene.time.now;
+    if (d < this.stuck.d - 0.5) this.stuck = { d, t: now };
+    else if (now - this.stuck.t > 900) { this.stop(); return [0, 0]; }
+    return [dx / d, dy / d];
+  }
+
   update(paused: boolean) {
     if (paused) {
       this.sprite.setVelocity(0);
       return;
     }
     if (!this.busy) {
-      const vx = (this.cursor.right.isDown || this.keys.D.isDown ? 1 : 0) - (this.cursor.left.isDown || this.keys.A.isDown ? 1 : 0);
-      const vy = (this.cursor.down.isDown || this.keys.S.isDown ? 1 : 0) - (this.cursor.up.isDown || this.keys.W.isDown ? 1 : 0);
-      const len = Math.hypot(vx, vy) || 1;
+      let vx = (this.cursor.right.isDown || this.keys.D.isDown ? 1 : 0) - (this.cursor.left.isDown || this.keys.A.isDown ? 1 : 0) + touchInput.vx + padInput.vx;
+      let vy = (this.cursor.down.isDown || this.keys.S.isDown ? 1 : 0) - (this.cursor.up.isDown || this.keys.W.isDown ? 1 : 0) + touchInput.vy + padInput.vy;
+      if (vx || vy) this.stop();
+      else if (this.path.length) [vx, vy] = this.pathVector();
+      // Bàn phím đi hết tốc; cần điều khiển lệch ít đi chậm
+      const len = Math.hypot(vx, vy);
+      const k = len > 1 ? 1 / len : 1;
       const speed = BASE_SPEED * (worn === 'speed' ? 1.1 : 1);
-      this.sprite.setVelocity((vx / len) * speed, (vy / len) * speed);
+      this.sprite.setVelocity(vx * k * speed, vy * k * speed);
       if (vx || vy) {
         // Đi bằng bàn phím: khung vàng trở về ô trước mặt cho tới khi chuột di chuyển lại
         this.mouseTile = null;

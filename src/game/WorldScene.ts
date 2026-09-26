@@ -4,6 +4,7 @@ import { SEASON_NAME } from '../data';
 import { ITEMS, type ItemId } from '../data';
 import { PlayerController, type Dir, type Tile } from './player';
 import { saveGame } from './save';
+import { ensureIdentity, pushCloud } from '../net/cloud';
 import { build, buyAnimal } from './animals';
 import { craft, swapSlots, upgradeBackpack, upgradeTool } from './resources';
 import { bauCua, buildKitchen, cast, cook, deliverOrder, donate, festivalToday, landFish } from './activities';
@@ -21,13 +22,17 @@ import { pieceName, REGIONS, type RegionId } from '../data';
 import { emit } from './bus';
 import { session, touchProfile } from './session';
 import { today } from './profile';
+import { endedContests } from './events';
 import { chooseProfession, pendingChoices, SKILL_NAME } from './skills';
 import { PETS } from '../data';
 import { saveSettings, settings } from '../ui/settings';
 import { advanceTutorial, isLastStep, tutorialText } from './tutorial';
+import { actionOf, pollPad, type Action } from './controls';
 
-/** 10 phút trong game trôi qua sau mỗi REAL_MS_PER_10MIN mili giây thật (≈ 11 phút/ngày). */
-const REAL_MS_PER_10MIN = 5000;
+/** 10 phút trong game trôi qua sau bấy nhiêu mili giây thật: 5 giây ở mức mặc định (≈ 11 phút/ngày), chậm hơn nếu người chơi chọn. */
+const msPer10Min = () => 5000 * ((settings.dayMinutes || 11) / 11);
+/** Tự lưu mỗi 2 phút thật (và mỗi lần chuyển cảnh, khi ẩn tab). */
+const AUTOSAVE_MS = 120_000;
 
 export interface SceneData {
   state: FarmState;
@@ -44,7 +49,9 @@ export interface SceneData {
 
 /** Sau khi ngủ / lúc mở game: gửi ảnh chụp nông trại, nhận thư tưới giúp & quà. */
 export async function syncFriends(s: FarmState, hud: Hud, onChange?: () => void) {
+  await ensureIdentity(s);
   if (!net.loadIdentity()) return;
+  void pushCloud(s).then((r) => { if (r === 'conflict') hud.toast('Máy khác vừa lưu bản mới hơn lên mây — lần mở game sau sẽ hỏi giữ bản nào'); });
   try {
     const lines = net.applyInbox(s, await net.fetchInbox());
     if (lines.length) {
@@ -53,6 +60,8 @@ export async function syncFriends(s: FarmState, hud: Hud, onChange?: () => void)
       window.setTimeout(() => hud.toast(lines.join(' · ')), 2600);
     }
     await net.uploadSnapshot(s);
+    const won = await net.claimContestRewards(session.profile, endedContests());
+    if (won.length) { touchProfile(true); window.setTimeout(() => hud.toast(won.join(' · ')), 5200); }
   } catch {
     /* không có mạng thì thôi, lần sau thử lại */
   }
@@ -69,6 +78,8 @@ export abstract class WorldScene extends Phaser.Scene {
   protected selected = 0;
   protected paused = false;
   private clockAcc = 0;
+  private autosaveAcc = 0;
+  private miniAcc = 1e9;
   private spawn?: string;
   protected message?: string;
   /** Đang ở nông trại bạn (chỉ tưới giúp, để quà). */
@@ -139,25 +150,17 @@ export abstract class WorldScene extends Phaser.Scene {
 
     const kb = this.input.keyboard!;
     kb.on('keydown', (e: KeyboardEvent) => {
+      if (e.key === 'Tab') e.preventDefault();
       if (this.paused) return;
       const n = Number(e.key);
-      if (n >= 1 && n <= 9) this.select(n - 1);
-      if (e.code === 'Space' || e.key === 'e' || e.key === 'E') this.tryInteract(this.ctrl.targetTile());
-      if (e.key === 'f' || e.key === 'F') this.eatHeld();
-      if (e.key === 'c' || e.key === 'C') this.hud.openCalendar(this.state);
-      if (e.key === 'i' || e.key === 'I') this.hud.openInventory(this.state);
-      if (e.key === 'k' || e.key === 'K') this.hud.openCrafting(this.state);
-      if (e.key === 'r' || e.key === 'R') this.hud.openRelations(this.state);
-      if (e.key === 'b' || e.key === 'B') this.hud.openFriends(this.state);
-      if (e.key === 'h' || e.key === 'H') this.hud.openHelp();
-      if (e.key === 'm' || e.key === 'M') this.openWorldMap();
-      if (e.key === 'Tab') { e.preventDefault(); window.dispatchEvent(new Event('lobby:open')); }
-      if (e.key === 'Escape') this.hud.openSettings({
-        onChange: () => { saveSettings(); applyVolume(); if (settings.music > 0) music.resume(); else music.stop(); },
-        onTutorial: () => { this.state.tutorial = 0; this.tutTick = 1e9; },
-        onQuit: () => location.reload(),
-      });
+      if (n >= 1 && n <= 9 && /^Digit|^Numpad/.test(e.code || 'Digit')) return this.select(n - 1);
+      const a = actionOf(e);
+      if (a) { if (a === 'use') e.preventDefault(); this.doAction(a); }
     });
+    // Nút cảm ứng, tay cầm gửi hành động qua sự kiện chung
+    const onAction = (e: Event) => { if (!this.paused) this.doAction((e as CustomEvent<Action>).detail); };
+    window.addEventListener('game:action', onAction);
+    this.events.once('shutdown', () => window.removeEventListener('game:action', onAction));
     this.input.on('wheel', (_p: unknown, _o: unknown, _dx: number, dy: number) => {
       if (!this.paused) this.select((this.selected + (dy > 0 ? 1 : 8)) % 9);
     });
@@ -344,6 +347,7 @@ export abstract class WorldScene extends Phaser.Scene {
     if (this.visit) return this.leaveVisit();
     if (this.paused) return;
     this.paused = true;
+    this.autosave();
     sfx('door');
     this.cameras.main.fadeOut(220, 18, 12, 22);
     this.cameras.main.once('camerafadeoutcomplete', () => {
@@ -480,12 +484,20 @@ export abstract class WorldScene extends Phaser.Scene {
   }
 
   update(_t: number, dtMs: number) {
+    // Tay cầm: B đóng bảng đang mở; còn lại là hành động / đổi món
+    for (const p of pollPad()) {
+      if (this.paused) { if (p === 'back') window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape' })); continue; }
+      if (p === 'prev' || p === 'next') this.select((this.selected + (p === 'next' ? 1 : 8)) % 9);
+      else if (p !== 'back') this.doAction(p);
+    }
     this.ctrl.update(this.paused);
     if (this.paused) return;
     this.clockAcc += dtMs;
-    while (this.clockAcc >= REAL_MS_PER_10MIN) {
-      this.clockAcc -= REAL_MS_PER_10MIN;
+    const step = msPer10Min();
+    while (this.clockAcc >= step) {
+      this.clockAcc -= step;
       const passOut = advanceClock(this.state, 10);
+      if (this.state.minutes === 17 * 60 && !this.visit) this.remindWater();
       this.renderHud();
       if (passOut) {
         this.goToSleep(true);
@@ -493,6 +505,13 @@ export abstract class WorldScene extends Phaser.Scene {
       }
     }
     this.state.player = { x: this.ctrl.sprite.x, y: this.ctrl.sprite.y };
+    this.miniAcc += dtMs;
+    if (this.miniAcc > 400) {
+      this.miniAcc = 0;
+      this.hud.minimap(this.ctrl.walkGrid(), this.ctrl.feetTile(), this.minimapMarks());
+    }
+    this.autosaveAcc += dtMs;
+    if (this.autosaveAcc > AUTOSAVE_MS) this.autosave();
     const f = this.ctrl.feetTile();
     const ex = this.exits.find((e) => f.x >= e.x && f.x < e.x + e.w && f.y >= e.y && f.y < e.y + e.h);
     if (ex) return this.travel(ex.to, ex.spawn);
@@ -506,6 +525,51 @@ export abstract class WorldScene extends Phaser.Scene {
     this.hud.night(this.state.minutes);
     music.setNight(this.state.minutes >= 19 * 60);
     this.followWeather();
+  }
+
+  /** 17h: còn cây ngoài đồng chưa tưới thì nhắc (trời mưa thì thôi). */
+  private remindWater() {
+    const dry = Object.keys(this.state.crops).filter((k) => Number(k.split(',')[0]) < 100 && !this.state.tilled[k]?.watered).length;
+    if (dry) this.hud.toast(`17 giờ rồi — còn ${dry} cây chưa tưới`);
+  }
+
+  /** Chấm vàng trên bản đồ nhỏ (dân làng…); cảnh nào có thì ghi đè. */
+  protected minimapMarks(): { x: number; y: number }[] {
+    return [];
+  }
+
+  /** Tự lưu giữa ngày (không lưu khi đang ghé nông trại bạn — lúc đó trạng thái là của bạn). */
+  protected autosave() {
+    this.autosaveAcc = 0;
+    if (!this.visit) saveGame(this.state);
+  }
+
+  /** Làm một hành động (phím, nút cảm ứng, tay cầm đều qua đây). */
+  doAction(a: Action) {
+    switch (a) {
+      case 'use': return this.tryInteract(this.ctrl.targetTile());
+      case 'eat': return this.eatHeld();
+      case 'calendar': return this.hud.openCalendar(this.state);
+      case 'inventory': return this.hud.openInventory(this.state);
+      case 'craft': return this.hud.openCrafting(this.state);
+      case 'relations': return this.hud.openRelations(this.state);
+      case 'friends': return void this.hud.openFriends(this.state);
+      case 'help': return this.hud.openHelp();
+      case 'wiki': return this.hud.openWiki(this.state);
+      case 'minimap': this.hud.toggleMinimap(); this.miniAcc = 1e9; return;
+      case 'map': return this.openWorldMap();
+      case 'lobby': return void window.dispatchEvent(new Event('lobby:open'));
+      case 'settings': return this.hud.openSettings({
+        onChange: () => { saveSettings(); applyVolume(); if (settings.music > 0) music.resume(); else music.stop(); },
+        onTutorial: () => { this.state.tutorial = 0; this.tutTick = 1e9; },
+        onQuit: () => { this.autosave(); location.reload(); },
+      });
+    }
+  }
+
+  /** Đang ghé nông trại bạn (thư bạn bè đợi về nhà mới nhận, kẻo tiền bị ghi đè khi rời đi). */
+  get visiting() {
+    return !!this.visit;
   }
 
   // ---------------------------------------------------------------- dành cho bảng debug (F9)

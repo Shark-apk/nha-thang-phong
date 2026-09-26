@@ -1,0 +1,17 @@
+{
+  "name": "Nhà Thằng Phong",
+  "short_name": "Nhà Phong",
+  "description": "Game nông trại pixel làng quê Việt Nam",
+  "lang": "vi",
+  "start_url": "/",
+  "scope": "/",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#3b2a2e",
+  "theme_color": "#3b2a2e",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

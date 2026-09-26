@@ -2,7 +2,7 @@
 import DATA from '../data/events.json';
 import { ITEMS } from '../data';
 import { addItem, type FarmState } from './farm';
-import { today, type Profile } from './profile';
+import { today, weekStart, type Profile } from './profile';
 
 export interface EventQuest { event: string; n: number; text: string; tem: number }
 export interface EventShopItem { kind: 'piece' | 'item' | 'decor' | 'pet'; id: string; name: string; price: number; qty?: number }
@@ -20,6 +20,16 @@ export interface PassState { key: string; points: number; claimed: number[] }
 
 const md = (day: string) => day.slice(5);
 /** Sự kiện đang diễn ra hôm nay (ngày thật). */
+/** Mã cuộc thi: sự kiện kèm năm, ngoài sự kiện là thi tuần. */
+export const contestId = (day = today()) => { const ev = activeEvent(day); return ev ? `${ev.id}-${day.slice(0, 4)}` : `tuan-${weekOf(day)}`; };
+const weekOf = (day: string, backDays = 0) => weekStart(new Date(new Date(`${day}T00:00:00`).getTime() - backDays * 86_400_000));
+/** Các cuộc thi vừa kết thúc (tuần trước + sự kiện năm nay đã hết) — để trao thưởng cuối kỳ. */
+export function endedContests(day = today()): { id: string; name: string }[] {
+  const out = [{ id: `tuan-${weekOf(day, 7)}`, name: 'Hội thi tuần trước' }];
+  for (const ev of EVENTS) if (md(day) > ev.end) out.push({ id: `${ev.id}-${day.slice(0, 4)}`, name: `Hội thi ${ev.name}` });
+  return out;
+}
+
 export const activeEvent = (day = today()) => EVENTS.find((e) => md(day) >= e.start && md(day) <= e.end);
 
 /** Sự kiện sắp tới và số ngày còn lại. */

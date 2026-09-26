@@ -6,6 +6,7 @@ Game nông trại pixel art kiểu Stardew Valley, bối cảnh làng quê Việ
 - Làng với 8 dân làng, lễ Tết và Trung Thu; chợ huyện, rừng, biển, vườn trên mây
 - Sảnh ngoài: điểm danh, nhiệm vụ ngày/tuần, sự kiện theo ngày thật, trang nhân vật, 24 khách mời
 - Bạn bè (không cần online cùng lúc): ghé thăm, tưới giúp, tặng quà, xếp hạng, thi đấu, chợ
+- Chơi được trên điện thoại (cần điều khiển, chạm để đi) và tay cầm; đổi phím; lưu mây + mã khôi phục
 
 Kế hoạch và tiến độ: [PLAN.md](PLAN.md) (mốc 1–10), [PLAN-2.md](PLAN-2.md) (mốc 11–20).
 
@@ -35,7 +36,13 @@ npm test         # test luật game + server
 npm run server   # server bạn bè, cổng 8787 (SQLite có sẵn trong Node ≥ 22)
 ```
 
-Chơi với bạn ở máy khác: mở server ra Internet (vd. `cloudflared tunnel --url http://localhost:8787`) rồi dán địa chỉ vào game (phím B → Máy chủ).
+Bản web chạy ở Vercel: phần game là trang tĩnh, API bạn bè là hàm `api/index.mjs` dùng Neon Postgres (biến `DATABASE_URL`), cùng bảng đường dẫn với server chạy trên máy (`server/api.mjs`). Vì bộ hình không có trong repo nên deploy từ máy có hình:
+
+```sh
+npm run deploy   # build trên máy (có bộ hình) rồi đẩy lên Vercel
+```
+
+Game cài được như app (PWA: `pwa/`), mở được khi mất mạng; bản lưu tự lưu mỗi 2 phút và lưu lên mây qua API bạn bè (Cài đặt → Bản lưu & khôi phục).
 
 ## Ghi công
 

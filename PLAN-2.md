@@ -357,7 +357,7 @@ Tổng khoảng **24 tuần** nếu làm đều. Mỗi mốc đều chơi đư�
   - Làm gọn: giống lai dùng lại hình của cây gốc rồi đổi màu; trái khổng lồ là hình nông sản phóng to; bản đồ đất cố định cho nông trại Đồng bằng (mốc 18 mỗi bản đồ một kiểu).
 
 - [x] **Mốc 18 — Vùng mới & bản đồ** (xong 2026-09-27)
-  - 5 bản đồ nông trại chọn lúc tạo ô lưu: Đồng bằng (giữ nguyên bố cục cũ), Ven biển (đất cát, bờ biển phía nam), Đồi chè (đất đỏ phía đông bắc, đất sét tây nam, ao nhỏ), Cao nguyên (gần như toàn đất đỏ, ao nhỏ), Miệt vườn (đất sét, kênh rạch). Mỗi bản đồ một màu cỏ.
+  - 5 bản đồ nông trại chọn lúc tạo ô lưu: Đồng bằng (giữ nguyên bố cục cũ), Ven biển (đất cát, bờ biển phía nam), Đồi chè (đất đỏ phía đông bắc, đất sét tây nam, ao nhỏ), Cao nguyên (gần như toàn đất đỏ, ao nhỏ), Miệt vườn (đất sét, kênh rạch). Mỗi bản đồ một màu cỏ. *(Sửa 2026-09-27: bản đầu gần như giống hệt Đồng bằng; giờ mỗi bản đồ có màu cỏ riêng và địa hình riêng — Ven biển: bãi cát + hàng dừa + biển đông nam; Đồi chè: 3 đồi chè bậc thang trên đất đỏ + rừng thông; Cao nguyên: đất đỏ bazan, đá tảng, thông, vườn cà phê; Miệt vườn: kênh dọc có bờ đê, vườn cây trái, dừa nước ven kênh.)*
   - **Rừng** (cấp 8): nấm, măng, mật ong rừng, nấm cục mọc mỗi sáng; 16 cây gỗ quý chặt bằng rìu (hôm sau mọc lại); hồ câu cá sông.
   - **Biển & đảo** (cấp 15): bãi cát nhặt vỏ sò, rác, san hô; lặn ở chỗ bong bóng cạnh cầu tàu (10 sức/lần: rác, vỏ sò, nhím biển, san hô, ngọc trai); trạm cứu hộ nhận 30 rác thì rạn san hô hồi sinh, mở 3 cá rạn (mú, hồng, đuối).
   - **Vườn trên mây** (cấp 20): luống 12×6 trồng mọi cây quanh năm, sáng nào cũng tự tưới; Tiên Mây bán 3 hạt chỉ mọc trên mây (dâu mây, bí mây, lúa trời).

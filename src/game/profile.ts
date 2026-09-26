@@ -54,6 +54,8 @@ export interface Profile {
   cards: string[];
   setsClaimed: string[];
   theater: string;
+  /** Cuộc thi đã nhận thưởng cuối kỳ (giai đoạn 3). */
+  contestsDone: string[];
 }
 
 export const PROFILE_VERSION = 5;
@@ -66,7 +68,7 @@ export function newProfile(): Profile {
     look: { ...DEFAULT_LOOK }, pet: { name: 'Mực', love: 0, pettedDay: '' },
     quests: emptyBook(), achievements: [], title: null, checkinCount: 0,
     events: {}, pass: { key: '', points: 0, claimed: [] },
-    guests: {}, cards: [], setsClaimed: [], theater: '',
+    guests: {}, cards: [], setsClaimed: [], theater: '', contestsDone: [],
   };
 }
 

@@ -1,3 +1,4 @@
+import { openSavePanel } from './savePanel';
 // Trang bìa: cảnh nhiều lớp đổi theo mùa & giờ thật, lệch nhẹ theo chuột; ngày lễ thật có trang trí riêng.
 import ICONS from '../../assets/Custom/icons.json';
 import { music } from '../audio/sound';
@@ -140,6 +141,24 @@ export function coverModal(html: string) {
   return m;
 }
 
+/** Hộp hỏi chọn một trong vài phương án; trả về phương án đã bấm. */
+export function askChoice(html: string, options: { id: string; label: string; primary?: boolean }[]): Promise<string> {
+  return new Promise((resolve) => {
+    const m = document.createElement('div');
+    m.className = 'title cover-modal';
+    m.innerHTML = `<div class="panel credits">${html}<div class="row"></div></div>`;
+    const row = m.querySelector('.row')!;
+    for (const o of options) {
+      const b = document.createElement('button');
+      b.className = o.primary ? 'btn btn--primary' : 'btn';
+      b.textContent = o.label;
+      b.onclick = () => { m.remove(); resolve(o.id); };
+      row.append(b);
+    }
+    document.body.append(m);
+  });
+}
+
 export function showCredits() {
   coverModal(`<h2>Ghi công</h2>
     <p><b>Hình ảnh:</b> bộ <i>Sprout Lands</i> của <b>Cup Nooble</b> (cupnooble.itch.io) — dùng theo giấy phép của tác giả, không phát tán lại bộ hình gốc. Cây, cá, dân làng, khách mời, cảnh bìa vẽ thêm bằng script theo phong cách Sprout Lands.</p>
@@ -152,7 +171,9 @@ export function showSettingsModal() {
   const m = coverModal(`<h2>Cài đặt</h2>
     <label class="set__row"><span>Nhạc</span><input type="range" min="0" max="100" data-k="music"></label>
     <label class="set__row"><span>Tiếng động</span><input type="range" min="0" max="100" data-k="sfx"></label>
-    <label class="set__row"><span>Cỡ chữ</span><input type="range" min="85" max="140" step="5" data-k="uiScale"></label>`);
+    <label class="set__row"><span>Cỡ chữ</span><input type="range" min="85" max="140" step="5" data-k="uiScale"></label>
+    <div class="row"><button class="btn" data-saves>Bản lưu & khôi phục</button></div>`);
+  m.querySelector<HTMLButtonElement>('[data-saves]')!.onclick = () => { m.remove(); openSavePanel(); };
   m.querySelectorAll<HTMLInputElement>('input[data-k]').forEach((inp) => {
     const k = inp.dataset.k as 'music' | 'sfx' | 'uiScale';
     inp.value = String(Math.round(settings[k] * 100));
