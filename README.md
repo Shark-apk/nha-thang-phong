@@ -46,4 +46,4 @@ Game cài được như app (PWA: `pwa/`), mở được khi mất mạng; bản
 
 ## Ghi công
 
-Hình gốc: [Sprout Lands](https://cupnooble.itch.io/sprout-lands-asset-pack) — Cup Nooble. Font: VT323.
+Hình gốc: [Sprout Lands](https://cupnooble.itch.io/sprout-lands-asset-pack) — Cup Nooble. Font: VT323. Tiếng động: [Kenney](https://kenney.nl) (CC0, trong `src/audio/sfx/`). Máy chủ co-op: `coop/` (Cloudflare Workers, `npm run deploy` trong thư mục đó).

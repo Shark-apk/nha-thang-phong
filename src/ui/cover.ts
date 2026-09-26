@@ -163,7 +163,7 @@ export function showCredits() {
   coverModal(`<h2>Ghi công</h2>
     <p><b>Hình ảnh:</b> bộ <i>Sprout Lands</i> của <b>Cup Nooble</b> (cupnooble.itch.io) — dùng theo giấy phép của tác giả, không phát tán lại bộ hình gốc. Cây, cá, dân làng, khách mời, cảnh bìa vẽ thêm bằng script theo phong cách Sprout Lands.</p>
     <p><b>Chữ:</b> VT323 — Peter Hull (SIL Open Font License).</p>
-    <p><b>Âm thanh & nhạc:</b> tự tổng hợp bằng WebAudio ngay trong game (thang ngũ cung), không dùng file ngoài.</p>
+    <p><b>Tiếng động:</b> bộ RPG Audio, Impact Sounds, Interface Sounds của <b>Kenney</b> (kenney.nl, giấy phép CC0). <b>Nhạc nền:</b> tự tổng hợp bằng WebAudio ngay trong game (thang ngũ cung).</p>
     <p><b>Công nghệ:</b> Phaser 3 (MIT), TypeScript, Vite. Làm cho vui, không thương mại.</p>`);
 }
 
