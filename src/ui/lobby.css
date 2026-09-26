@@ -13,15 +13,15 @@
 @keyframes sway { from { transform: rotate(-7deg); } to { transform: rotate(7deg); } }
 .cover__petal, .cover__snow { position: absolute; top: -12px; width: 7px; height: 5px; border-radius: 60% 0; background: #f8b8c8; animation: fall 9s linear infinite; }
 .cover__snow { width: 5px; height: 5px; border-radius: 50%; background: #fff; }
-@keyframes fall { to { transform: translate(-80px, 105vh) rotate(540deg); } }
+@keyframes fall { to { transform: translate(-80px, calc(105 * var(--vh))) rotate(540deg); } }
 .cover__front { position: absolute; inset: 0 0 80px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; }
 .cover__logo { position: relative; }
-.cover__logo h1 { margin: 0; font-size: clamp(64px, 10vw, 140px); font-weight: normal; line-height: 0.9; color: #fff4e0; letter-spacing: 3px; text-shadow: 0 6px 0 #8e5b3f, 0 11px 0 #3b2a2e; white-space: nowrap; }
+.cover__logo h1 { margin: 0; font-size: clamp(64px, calc(10 * var(--vw)), 140px); font-weight: normal; line-height: 0.9; color: #fff4e0; letter-spacing: 3px; text-shadow: 0 6px 0 #8e5b3f, 0 11px 0 #3b2a2e; white-space: nowrap; }
 .cover__chick { position: absolute; top: -52px; left: 0; width: 64px; height: 64px; background: url('/Characters/Free Chicken Sprites.png') 0 -64px / 256px 128px; image-rendering: pixelated; animation: chick-walk 0.5s steps(4) infinite, chick-run 9s linear infinite; }
 @keyframes chick-walk { to { background-position-x: -256px; } }
 @keyframes chick-run { 0% { left: -6%; transform: scaleX(-1) translateY(0); } 45% { transform: scaleX(-1) translateY(0); } 48% { transform: scaleX(-1) translateY(-26px); } 52% { transform: scaleX(-1) translateY(0); } 100% { left: 100%; transform: scaleX(-1) translateY(0); } }
 .cover__sub { margin: 0; padding: 2px 18px; font-size: 30px; color: var(--ink); background: var(--paper); border: 3px solid var(--edge); border-radius: 8px; }
-.cover__buttons { margin-top: 4vh; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.cover__buttons { margin-top: calc(4 * var(--vh)); display: flex; flex-direction: column; align-items: center; gap: 12px; }
 .cover__go { width: 300px; height: 72px; font-size: 44px; box-shadow: 0 6px 0 #7e3322; }
 .cover__foot { position: absolute; left: 0; right: 0; bottom: 0; height: 72px; padding: 0 28px; display: flex; align-items: center; justify-content: space-between; background: var(--ink); color: #e9d6ab; font-size: 22px; }
 .cover-modal { z-index: 60; }
@@ -70,8 +70,8 @@
 .lobby__bottom .btn { height: 52px; }
 .lobby__flash { padding: 6px 12px; background: var(--ink); color: var(--paper); border-radius: 8px; font-size: 22px; }
 .lobby__modal { position: absolute; inset: 0; z-index: 5; display: flex; align-items: center; justify-content: center; background: rgba(20, 12, 22, 0.5); }
-.lobby__modal .panel { max-width: 760px; max-height: 88vh; overflow-y: auto; }
-.mail-list { max-height: 50vh; }
+.lobby__modal .panel { max-width: 760px; max-height: calc(88 * var(--vh)); overflow-y: auto; }
+.mail-list { max-height: calc(50 * var(--vh)); }
 .mail-done { color: #4f7a2e; font-size: 22px; }
 .face-row { display: flex; gap: 8px; flex-wrap: wrap; }
 .face { width: 64px; height: 64px; padding: 0; background-color: #e9d6ab; border: 3px solid var(--edge); border-radius: 8px; }
@@ -90,10 +90,10 @@
 /* ---------------------------------------------------------------- trang nhân vật (mốc 12) */
 .lobby__face, .lobby__hero { background-image: none; }
 .lobby__pet { position: absolute; bottom: 58px; margin-left: 250px; width: 64px; height: 64px; background: url('/Custom/player/pets.png') 0 0 / 256px 256px; image-rendering: pixelated; animation: bob 1.1s ease-in-out infinite; z-index: 2; }
-.charpage .cp { width: min(1120px, 94vw); max-width: none; max-height: 92vh; }
+.charpage .cp { width: min(1120px, calc(94 * var(--vw))); max-width: none; max-height: calc(92 * var(--vh)); }
 .cp-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .cp-head .tabs .tab { border-radius: 8px; }
-.cp-body { min-height: 420px; max-height: 64vh; overflow-y: auto; }
+.cp-body { min-height: 420px; max-height: calc(64 * var(--vh)); overflow-y: auto; }
 .cp-grid { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 22px; }
 .cp-preview { display: flex; flex-direction: column; gap: 10px; align-items: stretch; }
 .cp-hero { height: 300px; background-color: #9bd4c3; border: 4px solid var(--edge); border-radius: 12px; image-rendering: pixelated; }
@@ -231,7 +231,7 @@
 .al-item--lock i { filter: brightness(0) opacity(0.3); }
 
 /* Giai đoạn 3: bảng bản lưu */
-.savepanel { width: min(760px, 94vw); max-height: 88vh; overflow: auto; }
+.savepanel { width: min(760px, calc(94 * var(--vw))); max-height: calc(88 * var(--vh)); overflow: auto; }
 .savepanel h3 { margin: 14px 0 4px; font-weight: normal; font-size: 26px; }
 .savepanel__slots { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; }
 .savepanel__note { padding: 8px 12px; background: #fff6df; border: 2px solid var(--accent); border-radius: 8px; }
@@ -245,8 +245,8 @@
 
 /* ---------------------------------------------------------------- điện thoại cầm dọc: hai cột thẻ trên, nhân vật xuống dưới, cuộn được */
 @media (orientation: portrait) and (max-width: 900px) {
-  .lobby__main { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: max-content max-content; overflow-y: auto; align-content: start; }
-  .lobby__col { overflow: visible; min-height: auto; }
-  .lobby__col > * { flex-shrink: 0; }
-  .lobby__stage { grid-column: 1 / -1; grid-row: 2; min-height: 360px; }
+  body:not(.rot90) .lobby__main { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: max-content max-content; overflow-y: auto; align-content: start; }
+  body:not(.rot90) .lobby__col { overflow: visible; min-height: auto; }
+  body:not(.rot90) .lobby__col > * { flex-shrink: 0; }
+  body:not(.rot90) .lobby__stage { grid-column: 1 / -1; grid-row: 2; min-height: 360px; }
 }

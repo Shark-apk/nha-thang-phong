@@ -58,6 +58,8 @@ export function mountTouch() {
     const r = pad.getBoundingClientRect();
     const R = r.width / 2;
     let dx = e.clientX - (r.left + R), dy = e.clientY - (r.top + R);
+    // Game đang tự xoay 90°: đổi hướng kéo trên màn hình sang hướng trong game
+    if (isRotated()) [dx, dy] = [dy, -dx];
     const d = Math.hypot(dx, dy);
     if (d > R) { dx *= R / d; dy *= R / d; }
     knob.style.transform = `translate(${dx}px, ${dy}px)`;
@@ -74,6 +76,37 @@ export function mountTouch() {
   // Mở bảng (túi, cửa hàng…) thì thả cần để nhân vật không đi tiếp
   window.addEventListener('blur', end);
 }
+
+// ---------------------------------------------------------------- xoay game ngang (khi trình duyệt không chịu xoay)
+// iPhone có khi không xoay trình duyệt dù đã tắt khoá xoay. Khi đó cả trang tự quay 90° bên trong màn dọc:
+// người chơi cầm máy nằm ngang như bình thường. Toạ độ chạm được đổi lại cho Phaser (boot.ts) và cần điều khiển.
+const ROT_KEY = 'nongtrai.ui.rot90';
+
+function rotPref() {
+  try { return localStorage.getItem(ROT_KEY) === '1'; } catch { return false; }
+}
+
+/** Đang xoay trang 90° (máy đứng dọc mà người chơi chọn xoay game). */
+export const isRotated = () => document.body.classList.contains('rot90');
+
+/** Bật/tắt theo lựa chọn + hướng thật của màn: máy đã ngang thì không cần xoay. */
+export function updateRotation() {
+  const on = isTouchDevice() && rotPref() && window.innerHeight > window.innerWidth;
+  const root = document.documentElement.style;
+  root.setProperty('--rw', `${window.innerHeight}px`);
+  root.setProperty('--rh', `${window.innerWidth}px`);
+  root.setProperty('--vw', on ? `${window.innerHeight / 100}px` : '1vw');
+  root.setProperty('--vh', on ? `${window.innerWidth / 100}px` : '1vh');
+  if (on === isRotated()) return;
+  document.body.classList.toggle('rot90', on);
+  window.dispatchEvent(new Event('resize'));
+}
+
+export function setRotatePref(on: boolean) {
+  try { if (on) localStorage.setItem(ROT_KEY, '1'); else localStorage.removeItem(ROT_KEY); } catch { /* bỏ qua */ }
+  updateRotation();
+}
+export const rotatePref = rotPref;
 
 // ---------------------------------------------------------------- màn dọc
 // Điện thoại bật "Khóa xoay dọc" (iPhone) / tắt "Tự động xoay" (Android) thì trình duyệt không bao giờ xoay ngang,
@@ -121,7 +154,8 @@ function mountRotate() {
       • <b>iPhone</b>: vuốt từ góc phải trên xuống → tắt biểu tượng ổ khoá 🔒<br>
       • <b>Android</b>: kéo thanh thông báo xuống → bật <b>Tự động xoay</b></p>
     <div class="rotate__btns">
-      <button class="rotate__btn rotate__btn--go" data-rot="fs">Toàn màn hình &amp; xoay ngang</button>
+      <button class="rotate__btn rotate__btn--go" data-rot="turn">Xoay game ngang (cầm máy nằm ngang)</button>
+      <button class="rotate__btn" data-rot="fs">Toàn màn hình &amp; xoay ngang</button>
       <button class="rotate__btn" data-rot="portrait">Chơi màn dọc</button>
     </div>
     <small class="rotate__msg"></small>
@@ -136,6 +170,11 @@ function mountRotate() {
     if (!(await goLandscape())) msg.textContent = 'Máy không cho tự xoay — hãy tắt khoá xoay rồi xoay ngang, hoặc bấm “Chơi màn dọc”.';
   });
   rotate.querySelector('[data-rot="portrait"]')!.addEventListener('click', () => setPortraitOk(true));
+  rotate.querySelector('[data-rot="turn"]')!.addEventListener('click', () => setRotatePref(true));
+  const again = () => { updateRotation(); window.setTimeout(updateRotation, 400); };
+  window.addEventListener('resize', updateRotation);
+  window.addEventListener('orientationchange', again);
+  updateRotation();
   const land = matchMedia('(orientation: landscape)');
   land.addEventListener?.('change', () => { if (land.matches) msg.textContent = ''; });
   return rotate;

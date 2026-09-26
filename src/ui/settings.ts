@@ -40,7 +40,9 @@ export function saveSettings() {
 /** Màn nhỏ (điện thoại) tự thu giao diện: giao diện vẽ cho màn ~1200×760.
  *  Màn dọc (điện thoại cầm đứng) chỉ cần vừa bề ngang ~780 (thanh đồ 10 ô) nên không bị thu quá nhỏ. */
 export function fitScale() {
-  const w = window.innerWidth, h = window.innerHeight;
+  // Trang đang tự xoay 90° (touch.ts): bề ngang / bề cao đổi chỗ
+  const rot = typeof document !== 'undefined' && document.body?.classList.contains('rot90');
+  const w = rot ? window.innerHeight : window.innerWidth, h = rot ? window.innerWidth : window.innerHeight;
   if (h > w) return Math.max(0.45, Math.min(1, w / 780, h / 1000));
   return Math.max(0.5, Math.min(1, w / 1200, h / 760));
 }

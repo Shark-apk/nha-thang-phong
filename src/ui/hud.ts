@@ -22,7 +22,7 @@ import './hud.css';
 import { sfx } from '../audio/sound';
 import { settings } from './settings';
 import { openSavePanel } from './savePanel';
-import { touchText } from './touch';
+import { rotatePref, setRotatePref, touchText } from './touch';
 import { coop, coopAvailable, hostRoom, joinRoom, leaveRoom, others, sendChat } from '../net/coop';
 import { session } from '../game/session';
 import { storyStep } from '../game/quests';
@@ -1194,6 +1194,15 @@ export class Hud {
     mc.addEventListener('change', () => { settings.reduceMotion = mc.checked; opts.onChange(); });
     motion.append(mc);
     box.append(day, motion);
+    if (document.body.classList.contains('touch')) {
+      const rot = el('label', 'set__row', '<span>Xoay game ngang khi máy đứng dọc (máy không tự xoay)</span>');
+      const rc = el('input') as HTMLInputElement;
+      rc.type = 'checkbox';
+      rc.checked = rotatePref();
+      rc.addEventListener('change', () => setRotatePref(rc.checked));
+      rot.append(rc);
+      box.append(rot);
+    }
     const row = el('div', 'row');
     const keys = el('button', 'btn', 'Đổi phím');
     keys.addEventListener('click', () => this.openKeys(opts));

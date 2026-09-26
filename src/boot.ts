@@ -19,7 +19,36 @@ import { pushCloud } from './net/cloud';
 import { initCoop, isGuest } from './net/coop';
 import { on as onGameEvent } from './game/bus';
 import { sfx } from './audio/sound';
+import { isRotated } from './ui/touch';
 import * as net from './net/friends';
+
+/**
+ * Trang tự xoay 90° (touch.ts, khi trình duyệt không chịu xoay ngang): Phaser đo khung và toạ độ chạm theo màn hình thật,
+ * nên đo lại cỡ khung theo bố cục (không theo hình đã xoay) và đổi toạ độ chạm sang khung đã xoay.
+ */
+function patchRotation(game: Phaser.Game) {
+  type Sm = { parent: HTMLElement | null; parentSize: { width: number; height: number; setSize(w: number, h: number): void }; getParentBounds(): boolean };
+  const sm = game.scale as unknown as Sm;
+  const bounds = sm.getParentBounds.bind(sm);
+  sm.getParentBounds = function (this: Sm) {
+    if (!isRotated() || !this.parent) return bounds();
+    const w = this.parent.clientWidth, h = this.parent.clientHeight;
+    if (this.parentSize.width === w && this.parentSize.height === h) return false;
+    this.parentSize.setSize(w, h);
+    return true;
+  };
+  type P = { position: { x: number; y: number }; prevPosition: { x: number; y: number } };
+  const im = game.input as unknown as { transformPointer(p: P, x: number, y: number, move: boolean): void };
+  const transform = im.transformPointer.bind(im);
+  im.transformPointer = (p, pageX, pageY, move) => {
+    if (!isRotated()) return transform(p, pageX, pageY, move);
+    p.prevPosition.x = p.position.x;
+    p.prevPosition.y = p.position.y;
+    // Quay 90° theo kim đồng hồ: toạ độ trong game = (y trên màn, bề ngang màn − x trên màn)
+    p.position.x = pageY - window.scrollY;
+    p.position.y = window.innerWidth - (pageX - window.scrollX);
+  };
+}
 
 export function start(state: FarmState) {
   const hud = new Hud(document.getElementById('ui')!);
@@ -34,6 +63,7 @@ export function start(state: FarmState) {
     physics: { default: 'arcade', arcade: { debug: false } },
     scene: [],
   });
+  patchRotation(game);
   game.scene.add('farm', FarmScene);
   game.scene.add('house', HouseScene);
   game.scene.add('mine', MineScene);
